@@ -1,0 +1,138 @@
+name: watch-skill
+title: Watch Skill — Video Intelligence for Agents
+version: 1.0.0
+author:
+  - name: Watch Skill Contributors
+    url: https://github.com/oxbshw/watch-skill
+  - name: Agent Zero Port
+    url: https://github.com/oxbshw/watch-skill/tree/main/docs/agents/agent-zero.md
+description: |
+  Give any Agent Zero session a video input: watch, index, ask, and iterate
+  (THE LOOP). 23 MCP tools + a CLI + REST + native Python wrappers, with a
+  specialized "watch-skill video analyst" sub-agent and auxiliary skills for
+  watching videos, asking with timestamped evidence, running THE LOOP, and
+  learning from mistakes. Local-first by default — transcription, OCR, and
+  search work without an API key; visual Q&A is opt-in per provider.
+homepage: https://github.com/oxbshw/watch-skill
+repository: https://github.com/oxbshw/watch-skill
+license: MIT
+keywords:
+  - video
+  - vision
+  - mcp
+  - transcription
+  - ocr
+  - the-loop
+  - agent-zero
+  - video-memory
+  - browser-verification
+
+# Capabilities this plugin contributes to Agent Zero
+capabilities:
+  - mcp_server       # registers the watch-skill MCP server with Agent Zero
+  - sub_agent        # ships a 'watch-skill video analyst' agent profile
+  - tools            # ships native Python tools (doctor, ask, list, watch-skill) for offline use
+  - api_endpoints    # ships REST endpoints (status, library overview, doctor)
+  - skills           # ships 4 a0 auxiliary skills (watching, asking, the-loop, learning-from-mistakes)
+  - webui_panel      # injects an MCP-help button into the WebUI topbar
+
+# Default MCP server registration — merged into Agent Zero Settings → MCP → external servers on enable.
+# The actual `watch-skill` CLI is installed separately (uv tool install watch-skill[all]@...).
+# Agent Zero will spawn this command via stdio and surface the 23 tools to the LLM automatically.
+mcp_servers:
+  watch-skill:
+    command: watch-skill
+    args:
+      - serve
+    env: {}
+    auto_start: true
+    install_hint: |
+      uv tool install "watch-skill[all] @ git+https://github.com/oxbshw/watch-skill"
+      # fallbacks: pipx install ... / pip install --user ...
+
+# Default plugin config (overridable in Agent Zero Settings → Plugins → watch-skill)
+config:
+  install:
+    auto_install: false       # ask the user before running 'uv tool install'
+    prefer_uv: true
+    fallback_pipx: true
+    fallback_pip: true
+  vision:
+    provider: auto            # auto | anthropic | openai | gemini | openrouter | ollama | none
+    model: ""                 # optional override
+    cheap_model: ""           # optional, for bulk perception
+    strong_model: ""          # optional, for final verification
+  index:
+    storage_dir: "~/.watch-skill"
+    auto_mount_in_docker: true
+  mcp:
+    expose_tools_in_prompt: true
+    tool_blacklist: []        # MCP tool names to hide from the LLM (rare)
+  loop:
+    default_max_iterations: 5
+    default_duration: 8.0
+    record_proof: true
+
+# Hooks contributed by this plugin (auto-discovered by the framework)
+hooks:
+  - hooks/hooks.py
+
+# Initialization (runs once on framework boot when plugin is enabled)
+initialize: extensions/python/init/initialize.py
+
+# Self-diagnose (called by Settings → Plugins → Run diagnostic)
+self_diagnose: extensions/python/init/self_diagnose.py
+
+# Optional agent profile bundled with the plugin
+agents:
+  - agents/watch-skill-agent/agent.yaml
+
+# Optional skills bundled with the plugin (Agent Zero a0 skills, NOT Agent Skills)
+a0_skills:
+  - skills/watching-videos
+  - skills/asking-with-evidence
+  - skills/the-loop
+  - skills/learning-from-mistakes
+
+# Plugin commands exposed in the chat input slash-menu
+commands:
+  - command: /watch
+    description: Watch a video (download, OCR, transcribe, index)
+    example: "/watch https://youtu.be/..."
+  - command: /ws-doctor
+    description: Run the watch-skill doctor (self-heal ffmpeg, yt-dlp, paths)
+  - command: /ws-library
+    description: Show the local video library overview
+  - command: /ws-stats
+    description: Show lifetime token-savings stats
+
+# WebUI additions (auto-injected into the WebUI)
+webui:
+  page-head:
+    - extensions/webui/page-head/watch-skill-help.js
+  sidebar-end: []
+  banners:
+    - extensions/python/banners/banner.py
+
+# REST API endpoints (registered under /plugins/watch-skill/*)
+api:
+  - api/status.py          # GET  /plugins/watch-skill/status
+  - api/doctor.py          # POST /plugins/watch-skill/doctor
+  - api/library.py         # GET  /plugins/watch-skill/library/overview
+  - api/setup.py           # POST /plugins/watch-skill/setup
+  - api/mcp_config.py      # GET  /plugins/watch-skill/mcp-config
+
+# Native Python tools (no MCP required, calls watch-skill CLI directly)
+tools:
+  - tools/ws_doctor.py
+  - tools/ws_list.py
+  - tools/ws_ask.py
+  - tools/ws_watch.py
+  - tools/ws_search.py
+  - tools/ws_library.py
+  - tools/ws_loop.py
+
+# Settings UI card (rendered in Settings → Plugins → watch-skill)
+settings_ui:
+  schema: config/settings_schema.yaml
+  help: docs/agent-zero.md

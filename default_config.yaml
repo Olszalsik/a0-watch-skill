@@ -1,0 +1,46 @@
+# Default configuration for the watch-skill plugin
+# Override values in Agent Zero Settings → Plugins → watch-skill.
+
+install:
+  auto_install: false          # ask before running `uv tool install`
+  prefer_uv: true              # prefer `uv tool install`
+  fallback_pipx: true          # fall back to `pipx install`
+  fallback_pip: true           # final fallback to `pip install --user`
+  install_extras: "[all]"      # which pip extras to install (e.g. "[mcp,perceive,ocr]")
+
+vision:
+  provider: auto               # auto | anthropic | openai | gemini | openrouter | ollama | none
+  model: ""                    # override single model name
+  cheap_model: ""              # for bulk perception (text/light)
+  strong_model: ""             # for final verification (heavier)
+  env_var_passthrough: true    # forward ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY / etc.
+
+index:
+  storage_dir: "~/.watch-skill"
+  auto_mount_in_docker: true   # if Agent Zero runs in Docker, mount ~/.watch-skill back to the host
+  library_chunk_k_videos: 5    # default k_videos for library_synthesize
+
+mcp:
+  expose_tools_in_prompt: true # surface the 23 MCP tools to the LLM in the system prompt
+  tool_blacklist: []           # MCP tool names to hide from the LLM (rare)
+  spawn_timeout_s: 30          # how long to wait for the MCP server to come up
+
+loop:
+  default_max_iterations: 5
+  default_duration: 8.0
+  record_proof: true           # render before/after MP4+GIF on pass
+  proof_format: "mp4,gif"      # proof output formats
+
+cost:
+  policy: auto                 # auto | cheapest | quality_first | offline_only
+  token_budget_per_call: 0     # 0 = unlimited; positive = cap per call
+  semantic_cache: true         # reuse answers for near-duplicate questions
+
+ui:
+  show_status_chip: true       # show "🎬 watch-skill ready" chip in WebUI topbar
+  show_help_button: true       # add a small help button next to the status chip
+
+logging:
+  level: info                  # debug | info | warn | error
+  log_cli_calls: false         # log every `watch-skill ...` CLI invocation
+  redact_secrets: true         # never log API keys

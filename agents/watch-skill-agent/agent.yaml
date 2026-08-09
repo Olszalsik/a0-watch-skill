@@ -1,0 +1,66 @@
+name: watch-skill-agent
+title: Watch-Skill Video Analyst
+description: |
+  A specialized Agent Zero sub-agent that wraps the watch-skill MCP layer
+  (23 tools) and a focused system prompt. Use it for any task that requires
+  understanding video — watching links, asking follow-ups with evidence,
+  running THE LOOP for visual verification, or building a searchable video
+  library. Defaults to local-first processing (no API key needed for
+  transcription, OCR, and search). Routes heavy visual Q&A to the configured
+  vision provider (anthropic | openai | gemini | openrouter | ollama).
+
+profile: developer          # inherits the developer system prompt + tools
+
+# Inherit the project root system prompt, then layer the watch-skill persona on top
+inherits: []
+prompt_include:
+  - prompts/watch-skill-agent.md
+
+# Agent-specific tool palette: the MCP server supplies the 23 video tools,
+# and the plugin's native tools add CLI fallbacks (doctor, list, ask, etc.)
+tools:
+  - code_execution_tool
+  - call_subordinate
+  - memory_save
+  - memory_load
+  - search_engine
+  - document_query
+  # native plugin tools (CLI fallbacks for the MCP server)
+  - ws_doctor
+  - ws_list
+  - ws_ask
+  - ws_watch
+  - ws_search
+  - ws_library
+  - ws_loop
+
+# Default sub-agent model — usually the same as the parent, but you can pin it
+model: ""                    # empty = inherit parent model
+
+# Tool-data modification (e.g. shrink MCP tool descriptions to save tokens)
+tool_data_modifications:
+  mcp:
+    watch-skill:
+      max_tool_description_chars: 900   # cap per-tool description to keep the system prompt lean
+
+# Auxiliary skills (Agent Zero a0 skills) loaded when this sub-agent is active
+a0_skills:
+  - watching-videos
+  - asking-with-evidence
+  - the-loop
+  - learning-from-mistakes
+
+# Working directory for this agent's tool output
+workdir: /a0/usr/workdir/watch-skill
+
+# Help text shown when the user invokes /help inside this sub-agent
+help: |
+  This sub-agent is a video intelligence worker. It exposes the watch-skill
+  MCP tools plus CLI fallbacks. Try:
+
+    /watch https://youtu.be/aqz-KE-bpKQ
+    /ws-library
+    /ws-stats
+    /ws-doctor
+
+  Or in plain English: "watch this video and tell me what happens at 0:10".
