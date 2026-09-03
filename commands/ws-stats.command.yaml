@@ -1,0 +1,5 @@
+name: ws-stats
+description: Show the watch-skill lifetime token-savings meter and engine stats.
+argument_hint: ""
+type: script
+script_path: ws-stats.py

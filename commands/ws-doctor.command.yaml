@@ -1,0 +1,5 @@
+name: ws-doctor
+description: Run the watch-skill self-healing doctor (checks/downloads ffmpeg, yt-dlp, transcription deps).
+argument_hint: "[--no-fix]"
+type: script
+script_path: ws-doctor.py

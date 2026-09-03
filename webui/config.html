@@ -1,0 +1,194 @@
+<html><head><title>Watch Skill v1.1.0</title>
+<script type="module">import { store } from "/components/plugins/plugin-settings-store.js";</script>
+<style>
+body{font-family:system-ui,sans-serif;padding:16px;max-width:820px;margin:0 auto;}
+.ws-card{border:1px solid rgba(127,127,127,.35);border-radius:8px;padding:12px;margin-bottom:10px;}
+.ws-card h3{margin:0 0 6px 0;font-size:14px;}
+.ws-card p.ws-desc{margin:0 0 8px 0;font-size:12px;opacity:.75;line-height:1.4;}
+.ws-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:4px 0;font-size:13px;}
+.ws-row label{flex:1;cursor:pointer;}
+.ws-row input[type=text],.ws-row input[type=number],.ws-row select{width:230px;padding:4px 6px;background:rgba(127,127,127,.12);color:inherit;border:1px solid rgba(127,127,127,.35);border-radius:4px;}
+.ws-row input[type=checkbox]{width:17px;height:17px;cursor:pointer;}
+.ws-hint{font-size:11px;opacity:.6;margin:4px 0 0 0;}
+.ws-status{font-family:monospace;font-size:12px;background:rgba(127,127,127,.12);padding:10px;border-radius:6px;border:1px solid rgba(127,127,127,.3);line-height:1.7;}
+.ws-actions{display:flex;gap:8px;margin:10px 0;}
+.ws-actions button{padding:8px 14px;border-radius:6px;border:1px solid rgba(127,127,127,.4);background:rgba(127,127,127,.12);color:inherit;cursor:pointer;font-size:13px;}
+.ws-msg{margin-top:6px;font-size:12px;min-height:1.2em;white-space:pre-wrap;}
+.ws-msg.ok{color:#6f6;}.ws-msg.err{color:#f66;}
+</style></head><body>
+<!--
+  v1.1.0: plugin settings screen for the watch-skill plugin.
+
+  - Binds to `config`, the parent modal scope's getter for
+    pluginSettingsPrototype.settings — the SAME object the modal footer
+    "Save" button serializes via the save_config action -> config.json.
+    (The v1.0.0 plugin had NO settings UI at all: config/settings_schema.yaml
+    was never rendered by any framework version.)
+  - wsBackfill() seeds the default_config.yaml values for keys absent from
+    the loaded config, creating the nested groups (install/vision/...) so
+    x-model="config.install.auto_install" never hits an undefined parent.
+  - Array-valued keys (mcp.tool_blacklist, loop.proof_format) are edited as
+    comma-separated text and written back as arrays via @input, so the saved
+    config.json keeps the shape the CLI expects.
+  - The status panel and the "Install CLI" button talk to the plugin's own
+    API handlers: GET /api/plugins/watch-skill/status (no CSRF) and POST
+    /api/plugins/watch-skill/setup (CSRF — hence the framework's fetchApi).
+-->
+<div x-data="wsSettings()" x-init="wsBackfill(config); refresh()">
+
+<div class="ws-card">
+<h3>Engine status</h3>
+<div class="ws-status">
+<div>CLI installed: <span x-text="status ? (status.cli_installed ? 'yes' : 'NO') : '…'"></span>
+<span x-show="status && status.cli_version" x-text="'(' + (status?.cli_version || '') + ')'"></span></div>
+<div>MCP registered: <span x-text="status ? (status.mcp_registered ? 'yes' : 'no') : '…'"></span></div>
+<div>Indexed videos: <span x-text="status && status.indexed_videos != null ? status.indexed_videos : 'unknown'"></span></div>
+<div x-show="status && !status.ready" style="color:#f66;" x-text="status?.hint || ''"></div>
+</div>
+<div class="ws-actions">
+<button @click="refresh()" :disabled="busy">Refresh</button>
+<button @click="installCli()" :disabled="busy">Install CLI</button>
+</div>
+<div class="ws-msg" :class="msgKind" x-text="msg"></div>
+<div class="ws-hint">&ldquo;Install CLI&rdquo; runs <code>uv/pipx/pip install watch-skill[all]</code> and registers the
+<code>watch-skill</code> MCP server in Agent Zero settings. Use the <b>Save</b> button in the modal footer to persist the fields below.</div>
+</div>
+
+<div class="ws-card">
+<h3>Installation</h3>
+<div class="ws-row"><label>Auto-install CLI on plugin install</label><input type="checkbox" x-model="config.install.auto_install"></div>
+<div class="ws-row"><label>Prefer <code>uv</code></label><input type="checkbox" x-model="config.install.prefer_uv"></div>
+<div class="ws-row"><label>Fall back to <code>pipx</code></label><input type="checkbox" x-model="config.install.fallback_pipx"></div>
+<div class="ws-row"><label>Fall back to <code>pip</code></label><input type="checkbox" x-model="config.install.fallback_pip"></div>
+<div class="ws-row"><label>pip extras</label><input type="text" x-model="config.install.install_extras"></div>
+</div>
+
+<div class="ws-card">
+<h3>Vision provider</h3>
+<p class="ws-desc">Model used for visual Q&amp;A and scene descriptions. Transcription, OCR and search work without one. API keys are read from environment variables, never stored here.</p>
+<div class="ws-row"><label>Provider</label>
+<select x-model="config.vision.provider">
+<option>auto</option><option>anthropic</option><option>openai</option><option>gemini</option><option>openrouter</option><option>ollama</option><option>none</option>
+</select></div>
+<div class="ws-row"><label>Single model override</label><input type="text" x-model="config.vision.model"></div>
+<div class="ws-row"><label>Cheap model (bulk perception)</label><input type="text" x-model="config.vision.cheap_model"></div>
+<div class="ws-row"><label>Strong model (verification)</label><input type="text" x-model="config.vision.strong_model"></div>
+<div class="ws-row"><label>Pass through env-var API keys</label><input type="checkbox" x-model="config.vision.env_var_passthrough"></div>
+</div>
+
+<div class="ws-card">
+<h3>Index &amp; storage</h3>
+<div class="ws-row"><label>Storage directory</label><input type="text" x-model="config.index.storage_dir"></div>
+<div class="ws-row"><label>Print docker volume-mount hint</label><input type="checkbox" x-model="config.index.auto_mount_in_docker"></div>
+<div class="ws-row"><label>Default k_videos for library synthesize</label><input type="number" min="1" x-model.number="config.index.library_chunk_k_videos"></div>
+</div>
+
+<div class="ws-card">
+<h3>MCP server</h3>
+<div class="ws-row"><label>Expose MCP tools in the system prompt</label><input type="checkbox" x-model="config.mcp.expose_tools_in_prompt"></div>
+<div class="ws-row"><label>Tool blacklist (comma-separated)</label>
+<input type="text" :value="(config.mcp?.tool_blacklist || []).join(', ')"
+       @input="config.mcp.tool_blacklist = $event.target.value.split(',').map(s => s.trim()).filter(Boolean)"></div>
+<div class="ws-row"><label>Spawn timeout (seconds)</label><input type="number" min="5" x-model.number="config.mcp.spawn_timeout_s"></div>
+</div>
+
+<div class="ws-card">
+<h3>THE LOOP</h3>
+<p class="ws-desc">Defaults for the browser/screen/game/video-gen verification loops.</p>
+<div class="ws-row"><label>Max iterations per loop</label><input type="number" min="1" x-model.number="config.loop.default_max_iterations"></div>
+<div class="ws-row"><label>Default recording length (seconds)</label><input type="number" min="1" step="0.5" x-model.number="config.loop.default_duration"></div>
+<div class="ws-row"><label>Render before/after proof on pass</label><input type="checkbox" x-model="config.loop.record_proof"></div>
+<div class="ws-row"><label>Proof formats (comma-separated)</label>
+<input type="text" :value="(config.loop?.proof_format || []).join(', ')"
+       @input="config.loop.proof_format = $event.target.value.split(',').map(s => s.trim()).filter(Boolean)"></div>
+</div>
+
+<div class="ws-card">
+<h3>Cost policy</h3>
+<div class="ws-row"><label>Policy</label>
+<select x-model="config.cost.policy">
+<option>auto</option><option>cheapest</option><option>quality_first</option><option>offline_only</option>
+</select></div>
+<div class="ws-row"><label>Token budget per call (0 = unlimited)</label><input type="number" min="0" x-model.number="config.cost.token_budget_per_call"></div>
+<div class="ws-row"><label>Semantic answer cache</label><input type="checkbox" x-model="config.cost.semantic_cache"></div>
+</div>
+
+<div class="ws-card">
+<h3>WebUI</h3>
+<div class="ws-row"><label>Show the &ldquo;Watch Skill&rdquo; status chip in the topbar</label><input type="checkbox" x-model="config.ui.show_status_chip"></div>
+<div class="ws-row"><label>Show the help button next to the chip</label><input type="checkbox" x-model="config.ui.show_help_button"></div>
+</div>
+
+</div>
+
+<script type="module">
+import { fetchApi } from "/js/api.js";
+
+// Mirror default_config.yaml — seeds keys ABSENT from the loaded config and
+// creates the nested group objects so x-model paths never hit undefined.
+const WS_DEFAULTS = {
+  install: { auto_install:false, prefer_uv:true, fallback_pipx:true, fallback_pip:true, install_extras:"[all]" },
+  vision: { provider:"auto", model:"", cheap_model:"", strong_model:"", env_var_passthrough:true },
+  index: { storage_dir:"~/.watch-skill", auto_mount_in_docker:true, library_chunk_k_videos:5 },
+  mcp: { expose_tools_in_prompt:true, tool_blacklist:[], spawn_timeout_s:30 },
+  loop: { default_max_iterations:5, default_duration:8.0, record_proof:true, proof_format:["mp4","gif"] },
+  cost: { policy:"auto", token_budget_per_call:0, semantic_cache:true },
+  ui: { show_status_chip:true, show_help_button:true },
+};
+
+function wsBackfill(cfg){
+  if(!cfg || typeof cfg !== "object") return;
+  for(const g of Object.keys(WS_DEFAULTS)){
+    if(!cfg[g] || typeof cfg[g] !== "object") cfg[g] = { ...WS_DEFAULTS[g] };
+    else for(const k of Object.keys(WS_DEFAULTS[g])){
+      if(cfg[g][k] === undefined) cfg[g][k] = WS_DEFAULTS[g][k];
+    }
+  }
+}
+
+function wsSettings(){
+  return {
+    busy:false, msg:"", msgKind:"", status:null,
+
+    async refresh(){
+      this.busy=true; this.msg="";
+      try{
+        const r = await fetchApi("/api/plugins/watch-skill/status");
+        this.status = await r.json();
+      }catch(e){
+        this.msg = "status: " + e; this.msgKind = "err";
+      }
+      this.busy=false;
+    },
+
+    async installCli(){
+      if(!confirm("Install the watch-skill CLI now? This runs uv/pipx/pip and may take a few minutes.")) return;
+      this.busy=true; this.msg="Installing watch-skill CLI…";
+      try{
+        const r = await fetchApi("/api/plugins/watch-skill/setup", {
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          body: JSON.stringify({ install:true, register_mcp:true }),
+        });
+        const j = await r.json();
+        const failed = (j.steps || []).filter(s => s.ok === false);
+        if(j.ok){
+          this.msg = "Install finished:\n" + (j.steps||[]).map(s=>s.name+": ok"+(s.via?(" via "+s.via):"")).join("\n");
+          this.msgKind = "ok";
+        } else {
+          this.msg = "Install failed:\n" + failed.map(s=>(s.error||"error")+(s.fix?("\n"+s.fix):"")).join("\n");
+          this.msgKind = "err";
+        }
+      }catch(e){
+        this.msg = "install: " + e; this.msgKind = "err";
+      }
+      this.busy=false;
+      await this.refresh();
+    },
+  };
+}
+
+window.wsBackfill = wsBackfill;
+window.wsSettings = wsSettings;
+</script>
+</body></html>

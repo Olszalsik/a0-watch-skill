@@ -5,24 +5,82 @@ Wraps `watch-skill loop` (MCP twins: `loop_start`, `loop_iterate`,
 
 The loop **only observes** — it never edits the user's code or UI. The
 LLM is expected to apply the suggested fix, then call `iterate`.
+
+v1.1.0 re-port: numeric tool args are coerced with try/except (A0 passes
+tool args as strings); `_common` imported by absolute path.
 """
 
 from __future__ import annotations
 
+import importlib.util
 import json as _json
+import sys
+from pathlib import Path
 from typing import Any, Optional
 
-from ._common import format_for_llm, load_plugin_config, run_cli
+from helpers.tool import Response, Tool
+
+_spec = importlib.util.spec_from_file_location(
+    "_watch_skill_common", Path(__file__).resolve().parent / "_common.py"
+)
+_ws_common = sys.modules.get("_watch_skill_common")
+if _ws_common is None:
+    _ws_common = importlib.util.module_from_spec(_spec)
+    sys.modules["_watch_skill_common"] = _ws_common
+    _spec.loader.exec_module(_ws_common)
+
+arg_str = _ws_common.arg_str
+format_for_llm = _ws_common.format_for_llm
+load_plugin_config = _ws_common.load_plugin_config
+run_cli = _ws_common.run_cli
 
 
 def _default_max_iterations() -> int:
     cfg = load_plugin_config().get("loop", {})
-    return int(cfg.get("default_max_iterations", 5))
+    try:
+        return int(cfg.get("default_max_iterations", 5))
+    except (TypeError, ValueError):
+        return 5
 
 
 def _default_duration() -> float:
     cfg = load_plugin_config().get("loop", {})
-    return float(cfg.get("default_duration", 8.0))
+    try:
+        return float(cfg.get("default_duration", 8.0))
+    except (TypeError, ValueError):
+        return 8.0
+
+
+def _coerce_float(value: Any, default: float) -> float:
+    """Tool args arrive as strings; never let a bad number crash the tool."""
+    if value is None or value == "":
+        return default
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _coerce_int(value: Any, default: int) -> int:
+    try:
+        return int(_coerce_float(value, float(default)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _coerce_script(value: Any) -> list[dict[str, Any]] | None:
+    """Accept a list, a JSON string, or nothing for the `script` arg."""
+    if value is None or value == "" or value == []:
+        return None
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = _json.loads(value)
+            return parsed if isinstance(parsed, list) else None
+        except _json.JSONDecodeError:
+            return None
+    return None
 
 
 def ws_loop(
@@ -145,3 +203,49 @@ def ws_loop(
         run_cli(["loop", *args], timeout=int(timeout) + 60, json_output=json_out),
         max_chars=20000,
     )
+
+
+class WsLoop(Tool):
+    async def execute(self, **kwargs) -> Response:
+        args = self.args or {}
+        mode = arg_str(args, "mode").lower()
+        if not mode:
+            return Response(
+                message=(
+                    "**ws_loop** needs `mode` (start, iterate, status, capture, "
+                    "video-gen, game, monitor)."
+                ),
+                break_loop=False,
+            )
+
+        duration = _coerce_float(args.get("duration"), -1.0)
+        max_iterations = _coerce_int(args.get("max_iterations"), -1)
+        interval = _coerce_float(args.get("interval"), 10.0)
+        sample_seconds = _coerce_float(args.get("sample_seconds"), 5.0)
+        max_checks = _coerce_int(args.get("max_checks"), 10)
+        timeout = _coerce_float(args.get("timeout"), 600.0)
+        if timeout <= 0:
+            timeout = 600.0
+        script = _coerce_script(args.get("script"))
+
+        report = ws_loop(
+            mode=mode,
+            target=arg_str(args, "target"),
+            pass_criteria=arg_str(args, "pass_criteria"),
+            script=script,
+            spec=arg_str(args, "spec"),
+            generator_cmd=arg_str(args, "generator_cmd"),
+            output=arg_str(args, "output"),
+            workdir=arg_str(args, "workdir"),
+            condition=arg_str(args, "condition"),
+            source=arg_str(args, "source"),
+            run_cmd=arg_str(args, "run_cmd"),
+            loop_id=arg_str(args, "loop_id"),
+            duration=duration,
+            interval=interval,
+            sample_seconds=sample_seconds,
+            max_iterations=max_iterations,
+            max_checks=max_checks,
+            timeout=timeout,
+        )
+        return Response(message=report, break_loop=False)

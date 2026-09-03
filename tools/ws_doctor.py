@@ -6,9 +6,36 @@ with a dependency or download error, or on first install.
 
 The wrapper does NOT install anything on its own; it returns the install
 hint if the CLI is missing so the LLM can present a one-liner to the user.
+
+v1.1.0 re-port: tool files are loaded by A0 as synthetic modules (basename
+only, no parent package), so `_common` is imported by absolute path instead
+of a relative import. One Tool class per file (framework contract).
 """
 
-from ._common import find_cli, format_for_llm, load_plugin_config, run_cli
+from __future__ import annotations
+
+import importlib.util
+import sys
+from pathlib import Path
+
+from helpers.tool import Response, Tool
+
+# Path-based import of _common.py (the plugin dir name contains a hyphen, so
+# `usr.plugins.watch-skill` is not an importable package).
+_spec = importlib.util.spec_from_file_location(
+    "_watch_skill_common", Path(__file__).resolve().parent / "_common.py"
+)
+_ws_common = sys.modules.get("_watch_skill_common")
+if _ws_common is None:
+    _ws_common = importlib.util.module_from_spec(_spec)
+    sys.modules["_watch_skill_common"] = _ws_common
+    _spec.loader.exec_module(_ws_common)
+
+arg_bool = _ws_common.arg_bool
+find_cli = _ws_common.find_cli
+format_for_llm = _ws_common.format_for_llm
+load_plugin_config = _ws_common.load_plugin_config
+run_cli = _ws_common.run_cli
 
 
 def ws_doctor(also_print_version: bool = True, fix: bool = False) -> str:
@@ -68,3 +95,13 @@ def ws_doctor(also_print_version: bool = True, fix: bool = False) -> str:
     parts.append(format_for_llm(run_cli(args, timeout=180), max_chars=8000))
     parts.append("```")
     return "\n".join(parts)
+
+
+class WsDoctor(Tool):
+    async def execute(self, **kwargs) -> Response:
+        args = self.args or {}
+        report = ws_doctor(
+            also_print_version=arg_bool(args, "also_print_version", True),
+            fix=arg_bool(args, "fix", False),
+        )
+        return Response(message=report, break_loop=False)

@@ -4,9 +4,34 @@ Wraps `watch-skill library` (MCP twins: `library_synthesize`,
 `library_overview`). Every watched video distills structured notes
 (entities, claims, chapters) with (video_id, timestamp) provenance.
 Indexing video N never reprocesses the others.
+
+v1.1.0 re-port: `ws_stats` and `ws_report_mistake` moved to their own files
+(one Tool class per file); `_common` imported by absolute path.
 """
 
-from ._common import format_for_llm, run_cli
+from __future__ import annotations
+
+import importlib.util
+import sys
+from pathlib import Path
+
+from helpers.tool import Response, Tool
+
+_spec = importlib.util.spec_from_file_location(
+    "_watch_skill_common", Path(__file__).resolve().parent / "_common.py"
+)
+_ws_common = sys.modules.get("_watch_skill_common")
+if _ws_common is None:
+    _ws_common = importlib.util.module_from_spec(_spec)
+    sys.modules["_watch_skill_common"] = _ws_common
+    _spec.loader.exec_module(_ws_common)
+
+arg_bool = _ws_common.arg_bool
+arg_int = _ws_common.arg_int
+arg_str = _ws_common.arg_str
+format_for_llm = _ws_common.format_for_llm
+load_plugin_config = _ws_common.load_plugin_config
+run_cli = _ws_common.run_cli
 
 
 def ws_library(
@@ -35,7 +60,7 @@ def ws_library(
         )
     if not question:
         return (
-            "**ws_library** needs a question, or pass `overview=True` to "
+            "**ws_library** needs a question, or pass `overview=true` to "
             "print the library overview."
         )
     return format_for_llm(
@@ -48,32 +73,29 @@ def ws_library(
     )
 
 
-def ws_stats() -> str:
-    """Return the lifetime token-savings meter (vs naive raw-frame injection)."""
-    return format_for_llm(
-        run_cli(["stats"], timeout=30, json_output=True),
-        max_chars=4000,
-    )
+def _default_k_videos() -> int:
+    cfg = load_plugin_config().get("index", {})
+    try:
+        return int(cfg.get("library_chunk_k_videos", 5))
+    except (TypeError, ValueError):
+        return 5
 
 
-def ws_report_mistake(
-    video: str,
-    question: str,
-    wrong_answer: str,
-    correction: str,
-    session_id: str = "",
-) -> str:
-    """Report a wrong video answer so the engine stores a local lesson."""
-    args = [
-        "report-mistake",
-        video,
-        "--question", question,
-        "--wrong", wrong_answer,
-        "--correction", correction,
-    ]
-    if session_id:
-        args += ["--session-id", session_id]
-    return format_for_llm(
-        run_cli(args, timeout=60, json_output=True),
-        max_chars=8000,
-    )
+class WsLibrary(Tool):
+    async def execute(self, **kwargs) -> Response:
+        args = self.args or {}
+        overview = arg_bool(args, "overview", False)
+        question = arg_str(args, "question")
+        if not overview and not question:
+            return Response(
+                message=(
+                    "**ws_library** needs a `question`, or pass `overview=true` "
+                    "to print the library overview."
+                ),
+                break_loop=False,
+            )
+        k_videos = arg_int(args, "k_videos", _default_k_videos())
+        report = ws_library(
+            question=question, k_videos=k_videos, overview=overview
+        )
+        return Response(message=report, break_loop=False)

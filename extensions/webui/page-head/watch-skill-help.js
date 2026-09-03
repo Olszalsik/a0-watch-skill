@@ -2,7 +2,8 @@
  * watch-skill WebUI helpers — injected into every page.
  *
  * Responsibilities:
- *   1. Poll /plugins/watch-skill/status every 30s and update the topbar chip.
+ *   1. Poll /api/plugins/watch-skill/status every 30s and update the topbar
+ *      chip.
  *   2. Add a small help button next to the chip that opens a popover with
  *      the available slash commands and the install one-liner (when the
  *      CLI is missing).
@@ -17,7 +18,10 @@
   window.__watchSkillHelpLoaded = true;
 
   const POLL_MS = 30000;
-  const API_STATUS = "/plugins/watch-skill/status";
+  // Real API route (helpers/api.py dispatches /api/plugins/<plugin>/<file>).
+  // The v1.0.0 URL (/plugins/watch-skill/status) was a static WebUI route
+  // that always 404'd.
+  const API_STATUS = "/api/plugins/watch-skill/status";
   const DOCS_URL =
     "https://github.com/oxbshw/watch-skill/tree/main/docs/agents/agent-zero.md";
   const INSTALL_LINE =
@@ -38,8 +42,28 @@
     return e;
   }
 
+  // Prefer the framework's fetchApi (CSRF + error handling), falling back to
+  // a plain fetch. Both tolerate failure: a missing endpoint (404) or a
+  // network error simply yields null and the chip stays unmounted.
+  let _fetchApi = null;
+  async function getFetchApi() {
+    if (_fetchApi) return _fetchApi;
+    try {
+      const mod = await import("/js/api.js");
+      if (mod && typeof mod.fetchApi === "function") _fetchApi = mod.fetchApi;
+    } catch (e) { /* fall back to raw fetch */ }
+    return _fetchApi;
+  }
+
   async function fetchStatus() {
     try {
+      const fetchApi = await getFetchApi();
+      if (fetchApi) {
+        const r = await fetchApi(API_STATUS);
+        if (!r.ok) return null;
+        const data = await r.json();
+        return data && typeof data === "object" ? data : null;
+      }
       const r = await fetch(API_STATUS, { credentials: "same-origin" });
       if (!r.ok) return null;
       return await r.json();
@@ -122,6 +146,9 @@
 
   function mount() {
     ensureStyle();
+    // The `ui.*` plugin toggles arrive on the status payload (see api/status.py
+    // `_ui_flags`); when the chip is disabled in Settings → Plugins → watch-skill,
+    // mount nothing.
     const anchor =
       $(".ws-chip") ||        // already mounted
       $("#topbar-actions") ||
@@ -132,27 +159,32 @@
 
     fetchStatus().then((status) => {
       if (!status) return;
+      const ui = status.ui || {};
+      if (ui.show_status_chip === false) return;
       const chip = renderChip(status);
-      const helpBtn = el("button", {
-        class: "ws-help-btn", title: "Watch Skill — quick reference",
-        "aria-label": "Watch Skill help",
-      }, "?");
-      const pop = helpPopover();
-      pop.style.display = "none";
-      helpBtn.addEventListener("click", (ev) => {
-        ev.stopPropagation();
-        pop.style.display = (pop.style.display === "none") ? "block" : "none";
-        const r = helpBtn.getBoundingClientRect();
-        pop.style.top  = (window.scrollY + r.bottom + 6) + "px";
-        pop.style.left = (window.scrollX + r.left - 160) + "px";
-      });
-      document.addEventListener("click", (ev) => {
-        if (!pop.contains(ev.target) && ev.target !== helpBtn) pop.style.display = "none";
-      });
-
-      const wrapper = el("span", { class: "ws-topbar-group" }, chip, helpBtn);
+      const showHelp = !(status.ui && status.ui.show_help_button === false);
+      const wrapper = el("span", { class: "ws-topbar-group" }, chip);
+      if (showHelp) {
+        const helpBtn = el("button", {
+          class: "ws-help-btn", title: "Watch Skill — quick reference",
+          "aria-label": "Watch Skill help",
+        }, "?");
+        const pop = helpPopover();
+        pop.style.display = "none";
+        helpBtn.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          pop.style.display = (pop.style.display === "none") ? "block" : "none";
+          const r = helpBtn.getBoundingClientRect();
+          pop.style.top  = (window.scrollY + r.bottom + 6) + "px";
+          pop.style.left = (window.scrollX + r.left - 160) + "px";
+        });
+        document.addEventListener("click", (ev) => {
+          if (!pop.contains(ev.target) && ev.target !== helpBtn) pop.style.display = "none";
+        });
+        wrapper.appendChild(helpBtn);
+        document.body.appendChild(pop);
+      }
       anchor.appendChild(wrapper);
-      document.body.appendChild(pop);
     });
   }
 
@@ -167,6 +199,7 @@
       const status = await fetchStatus();
       if (!status) return;
       const old = document.querySelector(".ws-chip");
+      if (old && status.ui && status.ui.show_status_chip === false) return;
       if (old) old.replaceWith(renderChip(status));
     }, POLL_MS);
   }

@@ -1,0 +1,5 @@
+name: watch
+description: Watch a video (URL or local path) and answer questions about it with the watch-skill engine.
+argument_hint: "<video url or path> [question...]"
+type: script
+script_path: watch.py

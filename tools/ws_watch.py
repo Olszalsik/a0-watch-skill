@@ -2,9 +2,34 @@
 
 Wraps `watch-skill watch` (MCP twin: `watch_video`). Always check the
 index with `ws_list` first; never re-watch a video that's already there.
+
+v1.1.0 re-port: `ws_status` (background-job polling) moved to its own file
+`ws_status.py` — the framework loads only the first Tool class per file.
+`_common` is imported by absolute path (synthetic-module loader).
 """
 
-from ._common import format_for_llm, run_cli
+from __future__ import annotations
+
+import importlib.util
+import sys
+from pathlib import Path
+
+from helpers.tool import Response, Tool
+
+_spec = importlib.util.spec_from_file_location(
+    "_watch_skill_common", Path(__file__).resolve().parent / "_common.py"
+)
+_ws_common = sys.modules.get("_watch_skill_common")
+if _ws_common is None:
+    _ws_common = importlib.util.module_from_spec(_spec)
+    sys.modules["_watch_skill_common"] = _ws_common
+    _spec.loader.exec_module(_ws_common)
+
+arg_bool = _ws_common.arg_bool
+arg_int = _ws_common.arg_int
+arg_str = _ws_common.arg_str
+format_for_llm = _ws_common.format_for_llm
+run_cli = _ws_common.run_cli
 
 
 def ws_watch(
@@ -63,8 +88,36 @@ def ws_watch(
     )
 
 
-def ws_status(job_id: str) -> str:
-    """Poll a backgrounded watch job. Use after ws_watch(background=True)."""
-    return format_for_llm(
-        run_cli(["status", job_id], timeout=30, json_output=True), max_chars=4000
-    )
+class WsWatch(Tool):
+    async def execute(self, **kwargs) -> Response:
+        args = self.args or {}
+        source = arg_str(args, "source")
+        if not source:
+            return Response(
+                message=(
+                    "**ws_watch** requires a non-empty `source` (video URL, media "
+                    "URL, HLS/DASH manifest, or local file path)."
+                ),
+                break_loop=False,
+            )
+        max_frames = arg_int(args, "max_frames", 0)
+        if max_frames > 2000:
+            return Response(
+                message=(
+                    "**ws_watch** rejects `max_frames` > 2000; use "
+                    "`transcript_only=true` or `background=true` instead."
+                ),
+                break_loop=False,
+            )
+        report = ws_watch(
+            source=source,
+            question=arg_str(args, "question"),
+            start=arg_str(args, "start"),
+            end=arg_str(args, "end"),
+            max_frames=max_frames,
+            transcript_only=arg_bool(args, "transcript_only", False),
+            background=arg_bool(args, "background", False),
+            batch=arg_bool(args, "batch", False),
+            limit=arg_int(args, "limit", 20),
+        )
+        return Response(message=report, break_loop=False)

@@ -3,9 +3,32 @@
 Wraps `watch-skill search` (MCP twin: `search_videos`). Use this when the
 user asks "find the moment in any video where X" and you don't know which
 video holds the answer. Follow each hit with `ws_ask` or `ws_moment`.
+
+v1.1.0 re-port: `ws_moment` moved to its own file `ws_moment.py` (one Tool
+class per file); `_common` imported by absolute path.
 """
 
-from ._common import format_for_llm, run_cli
+from __future__ import annotations
+
+import importlib.util
+import sys
+from pathlib import Path
+
+from helpers.tool import Response, Tool
+
+_spec = importlib.util.spec_from_file_location(
+    "_watch_skill_common", Path(__file__).resolve().parent / "_common.py"
+)
+_ws_common = sys.modules.get("_watch_skill_common")
+if _ws_common is None:
+    _ws_common = importlib.util.module_from_spec(_spec)
+    sys.modules["_watch_skill_common"] = _ws_common
+    _spec.loader.exec_module(_ws_common)
+
+arg_int = _ws_common.arg_int
+arg_str = _ws_common.arg_str
+format_for_llm = _ws_common.format_for_llm
+run_cli = _ws_common.run_cli
 
 
 def ws_search(
@@ -28,18 +51,14 @@ def ws_search(
     )
 
 
-def ws_moment(video: str, timestamp: str, window: float = 10.0) -> str:
-    """Zoom into one specific moment of a watched video.
-
-    Args:
-        video: video_id or original source.
-        timestamp: center of the window (`SS`, `MM:SS`, or `HH:MM:SS`).
-        window: seconds of context around the timestamp (default 10).
-
-    Returns:
-        Dense frames + transcript + OCR around the timestamp.
-    """
-    return format_for_llm(
-        run_cli(["moment", video, timestamp, "--window", str(window)], timeout=60),
-        max_chars=12000,
-    )
+class WsSearch(Tool):
+    async def execute(self, **kwargs) -> Response:
+        args = self.args or {}
+        query = arg_str(args, "query")
+        if not query:
+            return Response(
+                message="**ws_search** needs a non-empty `query`.",
+                break_loop=False,
+            )
+        report = ws_search(query=query, limit=arg_int(args, "limit", 10))
+        return Response(message=report, break_loop=False)

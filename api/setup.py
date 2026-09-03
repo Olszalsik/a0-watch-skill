@@ -17,8 +17,17 @@ Request body:
 The endpoint returns a JSON report of what was attempted, with a `fix`
 string for any failed step.
 
-Ported to the v2.5 ApiHandler contract (v2.2 used a bare `handler(request)`
-function which the framework no longer dispatches).
+v1.1.0 re-port:
+  - config is read via helpers.plugins.get_plugin_config (merged with
+    default_config.yaml by the plugin's get_plugin_config hook) — the
+    invented `a0_plugin_runtime` module is gone.
+  - MCP registration goes through helpers.settings.set_settings_delta
+    (usr/settings.json `mcp_servers` JSON string) instead of writing a
+    hardcoded /a0/tmp/settings.json.
+  - vision config is written to the plugin's config.json via
+    helpers.plugins.save_plugin_config instead of config/settings.yaml
+    (which nothing reads).
+  - pip fallback uses sys.executable (python3 does not exist on Windows).
 """
 
 from __future__ import annotations
@@ -27,12 +36,13 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
 from helpers.api import ApiHandler  # type: ignore
 
-SETTINGS_PATH = Path("/a0/tmp/settings.json")
+PLUGIN_DIR = Path(__file__).resolve().parent.parent
 
 
 def _which_or_none(cmd: str) -> str | None:
@@ -40,14 +50,17 @@ def _which_or_none(cmd: str) -> str | None:
 
 
 def _read_plugin_config() -> dict:
-    """Best-effort read of the plugin's merged config."""
+    """Read the plugin's merged config (defaults deep-merged under config.json
+    by the plugin's get_plugin_config hook)."""
     try:
-        from a0_plugin_runtime import get_plugin_config  # type: ignore
+        from helpers import plugins as framework_plugins
 
-        return get_plugin_config("watch-skill") or {}
+        cfg = framework_plugins.get_plugin_config("watch-skill")
+        if isinstance(cfg, dict):
+            return cfg
     except Exception:
         pass
-    cfg = Path(__file__).resolve().parent.parent / "default_config.yaml"
+    cfg = PLUGIN_DIR / "default_config.yaml"
     if cfg.exists():
         try:
             import yaml  # type: ignore
@@ -95,10 +108,11 @@ def _install_cli(extras: str = "[all]") -> dict:
         except Exception as e:
             steps.append({"tool": "pipx", "ok": False, "error": str(e)})
 
-    # Final fallback: pip --user
+    # Final fallback: pip --user via the running interpreter
+    # (python3 is not guaranteed to exist — notably on Windows).
     try:
         proc = subprocess.run(
-            ["python3", "-m", "pip", "install", "--user", pkg],
+            [sys.executable, "-m", "pip", "install", "--user", pkg],
             capture_output=True, text=True, timeout=300,
         )
         steps.append(
@@ -122,47 +136,50 @@ def _install_cli(extras: str = "[all]") -> dict:
 
 
 def _register_mcp(cli_path: str) -> dict:
-    """Surgically merge the `watch-skill` MCP server into settings.json."""
-    SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    """Merge the `watch-skill` MCP server into the framework `mcp_servers`
+    setting (a JSON string shaped {"mcpServers": {...}})."""
     try:
-        data: dict = {}
-        if SETTINGS_PATH.exists():
-            data = json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
-        servers = data.setdefault("mcp_servers", {})
+        from helpers import settings as framework_settings
+
+        current = framework_settings.get_settings()
+        raw = current.get("mcp_servers") if isinstance(current, dict) else None
+        if not isinstance(raw, str) or not raw.strip():
+            raw = '{"mcpServers": {}}'
+        data = json.loads(raw)
+        if not isinstance(data, dict):
+            data = {}
+        servers = data.setdefault("mcpServers", {})
         servers["watch-skill"] = {
             "command": cli_path,
             "args": ["serve"],
             "env": {},
         }
-        SETTINGS_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
-        return {"ok": True, "path": str(SETTINGS_PATH)}
+        framework_settings.set_settings_delta(
+            {"mcp_servers": json.dumps(data, indent=2)}
+        )
+        return {"ok": True, "via": "settings"}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
 
 def _configure_vision(provider: str, api_key_env: str) -> dict:
-    """Set the vision provider + API key on disk (key read from env, never chat)."""
+    """Store the vision provider + key-env name in the plugin's config.json
+    (the key VALUE is never stored — it is read from env at runtime)."""
     if not provider:
         return {"ok": True, "skipped": True}
     if provider not in {"anthropic", "openai", "gemini", "openrouter", "ollama"}:
         return {"ok": False, "error": f"unknown provider: {provider}"}
     key_val = os.environ.get(api_key_env, "") if api_key_env else ""
-    cfg_path = Path("/a0/usr/plugins/watch-skill/config/settings.yaml")
-    cfg_path.parent.mkdir(parents=True, exist_ok=True)
+    vision: dict[str, Any] = {"provider": provider}
+    if api_key_env:
+        vision["api_key_env"] = api_key_env
+    vision["api_key_present"] = bool(key_val)
     try:
-        cfg: dict = {}
-        if cfg_path.exists():
-            import yaml  # type: ignore
-            cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
-        cfg.setdefault("vision", {})["provider"] = provider
-        if api_key_env:
-            cfg["vision"]["api_key_env"] = api_key_env
-        if key_val:
-            cfg["vision"]["api_key_present"] = True
-        else:
-            cfg["vision"]["api_key_present"] = False
-        import yaml  # type: ignore
-        cfg_path.write_text(yaml.safe_dump(cfg), encoding="utf-8")
+        from helpers import plugins as framework_plugins
+
+        cfg = _read_plugin_config()
+        cfg.setdefault("vision", {}).update(vision)
+        framework_plugins.save_plugin_config("watch-skill", "", "", cfg)
         return {
             "ok": True,
             "provider": provider,

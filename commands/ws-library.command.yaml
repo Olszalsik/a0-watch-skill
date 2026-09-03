@@ -1,0 +1,5 @@
+name: ws-library
+description: Show the watch-skill video library — indexed videos, hours, notes, recent additions.
+argument_hint: "[question...]"
+type: script
+script_path: ws-library.py

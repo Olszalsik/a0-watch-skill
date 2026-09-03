@@ -5,12 +5,18 @@ Health snapshot for the watch-skill plugin:
   - the CLI's reported version
   - whether the MCP server config is registered with Agent Zero
   - how many videos are in the local index
-  - the lifetime token-savings meter (if available)
 
-Used by the WebUI status chip and the plugin card in Settings → Plugins.
+Used by the WebUI status chip (extensions/webui/page-head/) and the plugin
+card in Settings → Plugins.
 
-Ported to the v2.5 ApiHandler contract (v2.2 used a bare `handler(request)`
-function which the framework no longer dispatches).
+v1.1.0 re-port:
+  - GET contract: `get_methods() -> ["GET"]` + `requires_csrf() -> False`
+    (POST-only default made this endpoint 405 on plain browser GETs).
+  - MCP registration is read from the framework `mcp_servers` setting
+    (helpers.settings; a JSON string shaped {"mcpServers": {...}}), not
+    from a hardcoded /a0/tmp/settings.json path.
+  - the CLI version / index-count subprocesses are cached (60s TTL) so the
+    status chip does not spawn blocking subprocesses on every poll.
 """
 
 from __future__ import annotations
@@ -18,9 +24,23 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
-from pathlib import Path
+import time
 
 from helpers.api import ApiHandler  # type: ignore
+
+_CACHE: dict[str, tuple[float, object]] = {}
+_CACHE_TTL_S = 60.0
+
+
+def _cached(key: str, fn):
+    """Tiny TTL cache — these spawn subprocesses and are polled repeatedly."""
+    now = time.monotonic()
+    hit = _CACHE.get(key)
+    if hit and now - hit[0] < _CACHE_TTL_S:
+        return hit[1]
+    value = fn()
+    _CACHE[key] = (now, value)
+    return value
 
 
 def _cli_version() -> str | None:
@@ -59,32 +79,63 @@ def _indexed_count() -> int | None:
 
 
 def _settings_mcp_registered() -> bool:
-    """Check if Agent Zero's tmp/settings.json already lists `watch-skill`."""
-    p = Path("/a0/tmp/settings.json")
-    if not p.exists():
-        return False
+    """Check the framework `mcp_servers` setting (helpers.settings).
+
+    The setting is a JSON STRING shaped {"mcpServers": {...}} stored in
+    usr/settings.json — never read that file by hand.
+    """
     try:
-        data = json.loads(p.read_text(encoding="utf-8"))
-        servers = data.get("mcp_servers") or data.get("mcpServers") or {}
-        return "watch-skill" in servers
+        from helpers import settings as framework_settings
+
+        current = framework_settings.get_settings()
+        raw = current.get("mcp_servers") if isinstance(current, dict) else None
+        data = json.loads(raw) if isinstance(raw, str) and raw.strip() else {}
+        servers = data.get("mcpServers") if isinstance(data, dict) else None
+        return isinstance(servers, dict) and "watch-skill" in servers
     except Exception:
         return False
 
 
+def _ui_flags() -> dict:
+    """`ui.*` plugin config, for the WebUI chip/help-button toggles."""
+    try:
+        from helpers import plugins as framework_plugins
+
+        cfg = framework_plugins.get_plugin_config("watch-skill") or {}
+        ui = cfg.get("ui") if isinstance(cfg, dict) else None
+        if isinstance(ui, dict):
+            return {
+                "show_status_chip": bool(ui.get("show_status_chip", True)),
+                "show_help_button": bool(ui.get("show_help_button", True)),
+            }
+    except Exception:
+        pass
+    return {"show_status_chip": True, "show_help_button": True}
+
+
 class Status(ApiHandler):
     """GET /api/plugins/watch-skill/status → JSON snapshot."""
+
+    @classmethod
+    def get_methods(cls) -> list[str]:
+        return ["GET"]
+
+    @classmethod
+    def requires_csrf(cls) -> bool:
+        return False
 
     async def process(self, input_data, request) -> dict:
         cli = shutil.which("watch-skill")
         payload = {
             "ok": True,
             "plugin": "watch-skill",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "cli_installed": cli is not None,
             "cli_path": cli,
-            "cli_version": _cli_version(),
-            "mcp_registered": _settings_mcp_registered(),
-            "indexed_videos": _indexed_count(),
+            "cli_version": _cached("cli_version", _cli_version),
+            "mcp_registered": _cached("mcp_registered", _settings_mcp_registered),
+            "indexed_videos": _cached("indexed_count", _indexed_count),
+            "ui": _ui_flags(),
         }
         payload["ready"] = bool(payload["cli_installed"])
         if not payload["ready"]:

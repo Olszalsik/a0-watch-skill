@@ -20,6 +20,14 @@ from helpers.api import ApiHandler  # type: ignore
 class Library(ApiHandler):
     """GET /api/plugins/watch-skill/library/overview → JSON."""
 
+    @classmethod
+    def get_methods(cls) -> list[str]:
+        return ["GET"]
+
+    @classmethod
+    def requires_csrf(cls) -> bool:
+        return False
+
     async def process(self, input_data, request) -> dict:
         cli = shutil.which("watch-skill")
         if not cli:

@@ -1,138 +1,58 @@
-name: watch-skill
+# watch-skill plugin manifest.
+#
+# v1.1.0 re-port: the framework parses ONLY the keys below (helpers/plugins.py
+# PluginMetadata): name, title, description, version, settings_sections,
+# per_project_config, per_agent_config, always_enabled. The v1.0.0 keys —
+# capabilities, mcp_servers, config, hooks, initialize, self_diagnose, agents,
+# a0_skills, commands, webui, api, tools, settings_ui — were decorative (never
+# read by any framework version) and are documented here as comments instead.
+#
+# What this plugin actually ships (all discovered by directory convention):
+#   tools/                          -> native tools (one Tool subclass per file)
+#   prompts/agent.system.tool.*.md  -> tool prompts for the system prompt
+#   api/*.py                        -> /api/plugins/watch-skill/<file> handlers
+#   extensions/python/banners/      -> WebUI banner (topbar status chip)
+#   extensions/python/system_prompt/-> persona injection for the sub-agent
+#   extensions/webui/page-head/     -> topbar chip + help popover JS
+#   webui/config.html               -> Settings -> Plugins -> watch-skill panel
+#   commands/*.command.yaml         -> slash commands /watch /ws-doctor
+#                                      /ws-library /ws-stats (via _commands)
+#   agents/watch-skill-agent/       -> sub-agent profile (name/title/description)
+#   hooks.py                        -> install/uninstall + config hooks; the
+#                                      install hook registers the watch-skill
+#                                      MCP server in usr/settings.json
+#   skills/                         -> auxiliary a0 skills (served via _skills)
+name: watch_skill
 title: Watch Skill — Video Intelligence for Agents
-version: 1.0.0
-author:
-  - name: Watch Skill Contributors
-    url: https://github.com/oxbshw/watch-skill
-  - name: Agent Zero Port
-    url: https://github.com/oxbshw/watch-skill/tree/main/docs/agents/agent-zero.md
+version: 1.1.0
 description: |
   Give any Agent Zero session a video input: watch, index, ask, and iterate
-  (THE LOOP). 23 MCP tools + a CLI + REST + native Python wrappers, with a
-  specialized "watch-skill video analyst" sub-agent and auxiliary skills for
-  watching videos, asking with timestamped evidence, running THE LOOP, and
-  learning from mistakes. Local-first by default — transcription, OCR, and
-  search work without an API key; visual Q&A is opt-in per provider.
-homepage: https://github.com/oxbshw/watch-skill
-repository: https://github.com/oxbshw/watch-skill
-license: MIT
-keywords:
-  - video
-  - vision
-  - mcp
-  - transcription
-  - ocr
-  - the-loop
-  - agent-zero
-  - video-memory
-  - browser-verification
+  (THE LOOP). The watch-skill MCP server contributes 23 video tools; native
+  ws_* tools wrap the CLI as a fallback, with slash commands (/watch,
+  /ws-doctor, /ws-library, /ws-stats), a WebUI status chip + settings panel,
+  and a "watch-skill video analyst" sub-agent. Local-first by default —
+  transcription, OCR, and search work without an API key; visual Q&A is
+  opt-in per provider.
 
-# Capabilities this plugin contributes to Agent Zero
-capabilities:
-  - mcp_server       # registers the watch-skill MCP server with Agent Zero
-  - sub_agent        # ships a 'watch-skill video analyst' agent profile
-  - tools            # ships native Python tools (doctor, ask, list, watch-skill) for offline use
-  - api_endpoints    # ships REST endpoints (status, library overview, doctor)
-  - skills           # ships 4 a0 auxiliary skills (watching, asking, the-loop, learning-from-mistakes)
-  - webui_panel      # injects an MCP-help button into the WebUI topbar
+# CLI install (the plugin's install hook only registers the MCP server;
+# the CLI itself is installed separately, or automatically when
+# install.auto_install=true in Settings -> Plugins -> watch-skill):
+#   uv tool install "watch-skill[all] @ git+https://github.com/oxbshw/watch-skill"
+#   fallbacks: pipx install ... / pip install --user ...
 
-# Default MCP server registration — merged into Agent Zero Settings → MCP → external servers on enable.
-# The actual `watch-skill` CLI is installed separately (uv tool install watch-skill[all]@...).
-# Agent Zero will spawn this command via stdio and surface the 23 tools to the LLM automatically.
-mcp_servers:
-  watch-skill:
-    command: watch-skill
-    args:
-      - serve
-    env: {}
-    auto_start: true
-    install_hint: |
-      uv tool install "watch-skill[all] @ git+https://github.com/oxbshw/watch-skill"
-      # fallbacks: pipx install ... / pip install --user ...
+# API handlers (route = /api/plugins/watch-skill/<file basename>):
+#   api/status.py      GET  /api/plugins/watch-skill/status
+#   api/doctor.py      POST /api/plugins/watch-skill/doctor
+#   api/library.py     GET  /api/plugins/watch-skill/library
+#   api/setup.py       POST /api/plugins/watch-skill/setup
+#   api/mcp_config.py  GET  /api/plugins/watch-skill/mcp_config
 
-# Default plugin config (overridable in Agent Zero Settings → Plugins → watch-skill)
-config:
-  install:
-    auto_install: false       # ask the user before running 'uv tool install'
-    prefer_uv: true
-    fallback_pipx: true
-    fallback_pip: true
-  vision:
-    provider: auto            # auto | anthropic | openai | gemini | openrouter | ollama | none
-    model: ""                 # optional override
-    cheap_model: ""           # optional, for bulk perception
-    strong_model: ""          # optional, for final verification
-  index:
-    storage_dir: "~/.watch-skill"
-    auto_mount_in_docker: true
-  mcp:
-    expose_tools_in_prompt: true
-    tool_blacklist: []        # MCP tool names to hide from the LLM (rare)
-  loop:
-    default_max_iterations: 5
-    default_duration: 8.0
-    record_proof: true
+# Native tools (one per file in tools/, no MCP required):
+#   ws_doctor ws_list ws_ask ws_watch ws_status ws_search ws_moment
+#   ws_library ws_stats ws_report_mistake ws_loop
 
-# Hooks contributed by this plugin (auto-discovered by the framework)
-hooks:
-  - hooks/hooks.py
-
-# Initialization (runs once on framework boot when plugin is enabled)
-initialize: extensions/python/init/initialize.py
-
-# Self-diagnose (called by Settings → Plugins → Run diagnostic)
-self_diagnose: extensions/python/init/self_diagnose.py
-
-# Optional agent profile bundled with the plugin
-agents:
-  - agents/watch-skill-agent/agent.yaml
-
-# Optional skills bundled with the plugin (Agent Zero a0 skills, NOT Agent Skills)
-a0_skills:
-  - skills/watching-videos
-  - skills/asking-with-evidence
-  - skills/the-loop
-  - skills/learning-from-mistakes
-
-# Plugin commands exposed in the chat input slash-menu
-commands:
-  - command: /watch
-    description: Watch a video (download, OCR, transcribe, index)
-    example: "/watch https://youtu.be/..."
-  - command: /ws-doctor
-    description: Run the watch-skill doctor (self-heal ffmpeg, yt-dlp, paths)
-  - command: /ws-library
-    description: Show the local video library overview
-  - command: /ws-stats
-    description: Show lifetime token-savings stats
-
-# WebUI additions (auto-injected into the WebUI)
-webui:
-  page-head:
-    - extensions/webui/page-head/watch-skill-help.js
-  sidebar-end: []
-  banners:
-    - extensions/python/banners/banner.py
-
-# REST API endpoints (registered under /plugins/watch-skill/*)
-api:
-  - api/status.py          # GET  /plugins/watch-skill/status
-  - api/doctor.py          # POST /plugins/watch-skill/doctor
-  - api/library.py         # GET  /plugins/watch-skill/library/overview
-  - api/setup.py           # POST /plugins/watch-skill/setup
-  - api/mcp_config.py      # GET  /plugins/watch-skill/mcp-config
-
-# Native Python tools (no MCP required, calls watch-skill CLI directly)
-tools:
-  - tools/ws_doctor.py
-  - tools/ws_list.py
-  - tools/ws_ask.py
-  - tools/ws_watch.py
-  - tools/ws_search.py
-  - tools/ws_library.py
-  - tools/ws_loop.py
-
-# Settings UI card (rendered in Settings → Plugins → watch-skill)
-settings_ui:
-  schema: config/settings_schema.yaml
-  help: docs/agent-zero.md
+# Slash commands (commands/, dispatched by the _commands plugin):
+#   /watch <url-or-path> [question...]
+#   /ws-doctor [--no-fix]
+#   /ws-library [question...]
+#   /ws-stats

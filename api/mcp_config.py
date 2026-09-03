@@ -4,15 +4,17 @@ Returns the `mcpServers` JSON snippet Agent Zero needs to register the
 watch-skill MCP server. Used by both the auto-enable path and the
 "copy MCP config" button in the WebUI.
 
-Ported to the v2.5 ApiHandler contract (v2.2 used a bare `handler(request)`
-function which the framework no longer dispatches).
+v1.1.0 re-port:
+  - GET contract: `get_methods() -> ["GET"]` + `requires_csrf() -> False`.
+  - registration is checked against the framework `mcp_servers` setting
+    (helpers.settings; a JSON string shaped {"mcpServers": {...}}), not a
+    hardcoded /a0/tmp/settings.json path.
 """
 
 from __future__ import annotations
 
 import json
 import shutil
-from pathlib import Path
 
 from helpers.api import ApiHandler  # type: ignore
 
@@ -23,19 +25,28 @@ def _discover_cli() -> str:
 
 
 def _is_already_registered() -> bool:
-    p = Path("/a0/tmp/settings.json")
-    if not p.exists():
-        return False
     try:
-        data = json.loads(p.read_text(encoding="utf-8"))
-        servers = data.get("mcp_servers") or data.get("mcpServers") or {}
-        return "watch-skill" in servers
+        from helpers import settings as framework_settings
+
+        current = framework_settings.get_settings()
+        raw = current.get("mcp_servers") if isinstance(current, dict) else None
+        data = json.loads(raw) if isinstance(raw, str) and raw.strip() else {}
+        servers = data.get("mcpServers") if isinstance(data, dict) else None
+        return isinstance(servers, dict) and "watch-skill" in servers
     except Exception:
         return False
 
 
 class McpConfig(ApiHandler):
     """GET /api/plugins/watch-skill/mcp-config → JSON."""
+
+    @classmethod
+    def get_methods(cls) -> list[str]:
+        return ["GET"]
+
+    @classmethod
+    def requires_csrf(cls) -> bool:
+        return False
 
     async def process(self, input_data, request) -> dict:
         cli = _discover_cli()
