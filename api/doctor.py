@@ -10,6 +10,8 @@ function which the framework no longer dispatches).
 
 from __future__ import annotations
 
+import asyncio
+
 import shutil
 import subprocess
 from typing import Any
@@ -39,8 +41,13 @@ class Doctor(ApiHandler):
         if fix:
             args.append("--fix")
         try:
-            proc = subprocess.run(
-                args, capture_output=True, text=True, timeout=180, check=False
+            proc = await asyncio.to_thread(
+                subprocess.run,
+                args,
+                capture_output=True,
+                text=True,
+                timeout=180,
+                check=False,
             )
         except subprocess.TimeoutExpired:
             return {"ok": False, "error": "health.timeout"}

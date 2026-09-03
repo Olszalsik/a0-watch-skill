@@ -17,10 +17,10 @@ Give any Agent Zero session a video input: watch, index, ask, and iterate (THE L
 - `commands/` — 4 slash commands (`watch`, `ws-doctor`, `ws-library`, `ws-stats`) as `*.command.yaml` + script `run(payload)` files, dispatched by the `_commands` plugin.
 - `extensions/python/banners/banner.py` — topbar status chip (framework banner contract: append dicts to `banners`).
 - `extensions/python/system_prompt/_10_watch_skill_persona.py` — appends the persona when `agent.config.profile == "watch-skill-agent"`.
-- `extensions/webui/page-head/watch-skill-help.js` — topbar chip + help popover (polls `/api/plugins/watch-skill/status`).
+- ~~`extensions/webui/page-head/watch-skill-help.js`~~ REMOVED v1.1.1 — the framework's page-head point is HTML-only (importHtmlExtensions filters `*.html`); JS there was never loaded. The banners extension chip is the live status surface.
 - `webui/config.html` — Settings → Plugins panel (binds `pluginSettingsPrototype.settings` via `config`; the modal Save → `save_config` → config.json).
 - `agents/watch-skill-agent/agent.yaml` — sub-agent profile (name/title/description/context/enabled only).
-- `skills/` — 4 auxiliary a0 skills. `config/settings_schema.yaml` — decorative (no framework version renders it; `webui/config.html` is the real settings UI).
+- `skills/` — 4 auxiliary a0 skills. ~~`config/settings_schema.yaml`~~ REMOVED v1.1.1 (nothing reads `settings_schema`; `webui/config.html` is the real settings UI).
 
 ## Local Contracts
 
@@ -40,7 +40,7 @@ The v1.0.0 tree was written against a v2.2-era contract that no framework versio
 - **F3/F5** — `hooks/hooks.py` (never loaded, invented hook names) and `extensions/python/init/{initialize,self_diagnose}.py` (nonexistent extension points) deleted; real root `hooks.py` created; slash commands moved to `commands/` under the `_commands` dispatch contract.
 - **F4** — banner rewritten from `render(context) -> str` to `WatchSkillBanner(Extension)` appending banner dicts; library-count subprocess cached 60s.
 - **F6** — GET endpoints got `get_methods()/requires_csrf()` overrides (were 405).
-- **F7** — page-head JS URL fixed `/plugins/...` → `/api/plugins/watch-skill/status`, uses `fetchApi` (dynamic import, raw-fetch fallback), tolerates 404.
+- **F7 (obsolete)** — the page-head JS this fix targeted was never loaded by the framework at all; removed in v1.1.1. Was: page-head JS URL fixed `/plugins/...` → `/api/plugins/watch-skill/status`, uses `fetchApi` (dynamic import, raw-fetch fallback), tolerates 404.
 - **F8** — MCP-registration checks read the framework `mcp_servers` setting (helpers.settings) instead of a hardcoded `/a0/tmp/settings.json`.
 - **F9** — hooks.py install calls `api/setup.py::_install_cli` via a path-based import (hyphenated dir blocks packages).
 - **F10** — phantom `a0_plugin_runtime` import removed from api/setup.py; real settings UI added at `webui/config.html`.
@@ -51,6 +51,32 @@ The v1.0.0 tree was written against a v2.2-era contract that no framework versio
 - **F15** — setup.py pip fallback uses `sys.executable` (no `python3` on Windows).
 - **F16** — ws_loop numeric args coerced (`_coerce_float/_coerce_int/_coerce_script`).
 - **F17** — README/AGENTS.md doc URLs corrected to `/api/plugins/watch-skill/<handler>`.
+
+## v1.1.1 — Second-pass Audit Fixes (2026-09-03)
+
+- **Blocking subprocesses off the event loop (HIGH)**: every ws_* tool,
+  `api/doctor.py`, `api/setup.py` (up to 3x300s pip installs), `api/library.py`,
+  `api/status.py` and the banners extension ran blocking `subprocess.run`
+  directly on the server event loop — a foreground `ws_watch` (600s) or an
+  LLM-supplied huge `timeout` on `ws_loop` froze the ENTIRE server. All async
+  entry points now offload via `asyncio.to_thread` (`run_cli_async` helper in
+  `tools/_common.py`).
+- **Phantom `__pycache__` agent profile (HIGH)**: `agents/__init__.py` seeded a
+  `__pycache__` dir that subagent discovery listed as a selectable (broken)
+  profile. Removed `agents/__init__.py` (framework discovers agents by
+  directory convention) and the pycache.
+- **Dead page-head JS removed (HIGH)**: `extensions/webui/page-head/watch-skill-help.js`
+  was never loaded — the framework's page-head point is HTML-only
+  (`importHtmlExtensions` filters `*.html`). The banners extension chip is the
+  live status surface. Also removed decorative `config/settings_schema.yaml`
+  (nothing reads it).
+- **`_watch_skill_common` reload**: the shared-module cache is now
+  mtime-keyed — a plugin update no longer leaves running agents on the stale
+  cached `_common` module, and a module whose exec raised mid-init is
+  re-executed on the next load instead of staying poisoned.
+- `hooks.install` reads the MERGED plugin config (defaults under config.json),
+  not raw config.json. `api/status.py` version read from plugin.yaml. Stale
+  route docstrings fixed (`/library`, `/mcp_config`).
 
 ## Verification
 

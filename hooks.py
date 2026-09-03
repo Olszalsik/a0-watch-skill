@@ -136,10 +136,16 @@ def install() -> dict:
             "uv tool install "
             "'watch-skill[all] @ git+https://github.com/oxbshw/watch-skill'"
         )
+        # v1.1.1: read the MERGED plugin config (default_config.yaml
+        # deep-merged under config.json via our own get_plugin_config hook)
+        # instead of raw config.json -- otherwise defaults documented in
+        # the YAML were invisible to the install hook.
         try:
-            cfg = json.loads(
-                (PLUGIN_DIR / "config.json").read_text(encoding="utf-8")
-            ) if (PLUGIN_DIR / "config.json").exists() else {}
+            from helpers import plugins as framework_plugins
+
+            cfg = framework_plugins.get_plugin_config(PLUGIN_NAME) or {}
+            if not isinstance(cfg, dict):
+                cfg = {}
         except Exception:
             cfg = {}
         if cfg.get("install", {}).get("auto_install", False):

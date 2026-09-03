@@ -32,6 +32,8 @@ v1.1.0 re-port:
 
 from __future__ import annotations
 
+import asyncio
+
 import json
 import os
 import shutil
@@ -206,7 +208,9 @@ class Setup(ApiHandler):
         report: dict[str, Any] = {"steps": []}
 
         if install or shutil.which("watch-skill") is None:
-            result = _install_cli(install_cfg.get("install_extras", "[all]"))
+            result = await asyncio.to_thread(
+                _install_cli, install_cfg.get("install_extras", "[all]")
+            )
             report["steps"].append({"name": "install_cli", **result})
         else:
             report["steps"].append(

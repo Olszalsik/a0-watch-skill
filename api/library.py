@@ -1,4 +1,4 @@
-"""GET /api/plugins/watch-skill/library/overview
+"""GET /api/plugins/watch-skill/library
 
 Returns the `watch-skill library overview` JSON — videos indexed, hours,
 note counts, recurring entities, recent additions, and the lifetime
@@ -10,6 +10,8 @@ function which the framework no longer dispatches).
 
 from __future__ import annotations
 
+import asyncio
+
 import json
 import shutil
 import subprocess
@@ -18,7 +20,7 @@ from helpers.api import ApiHandler  # type: ignore
 
 
 class Library(ApiHandler):
-    """GET /api/plugins/watch-skill/library/overview → JSON."""
+    """GET /api/plugins/watch-skill/library → JSON."""
 
     @classmethod
     def get_methods(cls) -> list[str]:
@@ -38,7 +40,8 @@ class Library(ApiHandler):
             }
 
         try:
-            proc = subprocess.run(
+            proc = await asyncio.to_thread(
+                subprocess.run,
                 [cli, "library", "overview", "--json"],
                 capture_output=True,
                 text=True,

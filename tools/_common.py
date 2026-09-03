@@ -12,7 +12,7 @@ modules (basename only, no parent package), so relative imports such as
 `from ._common import ...` fail. The hyphen in the plugin directory name
 (`watch-skill`) also makes `usr.plugins.watch-skill` an invalid package
 path. Each tool file therefore loads this module by absolute path via
-importlib (see `_load_common()` / the loader snippet duplicated at the top
+importlib (see the loader snippet duplicated at the top
 of every ws_*.py). The module is registered in sys.modules as
 `_watch_skill_common` so all tool files share one instance.
 
@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import os
+import asyncio
 import shutil
 import subprocess
 import time
@@ -143,6 +144,19 @@ def build_env(passthrough_keys: bool = True) -> dict:
     forwarded = {k: v for k, v in env.items() if k in VISION_ENV_VARS and v}
     env.update(forwarded)
     return env
+
+
+async def run_cli_async(*args, **kwargs) -> dict[str, Any]:
+    """Awaitable run_cli: offload the blocking subprocess to a worker thread.
+
+    v1.1.1: run_cli is a blocking subprocess.run -- the framework awaits
+    Tool.execute() directly on the server event loop (agent.py), so a
+    foreground ws_watch (600s) or an LLM-supplied huge `timeout` on
+    ws_loop froze the ENTIRE server (all chats, WS heartbeats, WebUI)
+    for the duration. Every async entry point must call this wrapper
+    (or its own asyncio.to_thread) instead of run_cli directly.
+    """
+    return await asyncio.to_thread(run_cli, *args, **kwargs)
 
 
 def run_cli(

@@ -10,20 +10,30 @@ class per file); `_common` imported by absolute path.
 
 from __future__ import annotations
 
+import asyncio
+
 import importlib.util
 import sys
 from pathlib import Path
 
 from helpers.tool import Response, Tool
 
-_spec = importlib.util.spec_from_file_location(
-    "_watch_skill_common", Path(__file__).resolve().parent / "_common.py"
-)
+_common_path = Path(__file__).resolve().parent / "_common.py"
+_common_mtime = _common_path.stat().st_mtime
 _ws_common = sys.modules.get("_watch_skill_common")
+# v1.1.1: reuse the cached module only if _common.py has not changed since
+# it was executed. Without this, a Hub/plugin update left running agents on
+# the STALE cached module until a full server restart; and a module whose
+# exec_module() raised mid-init stayed poisoned in sys.modules forever
+# (no __ws_common_mtime__ attribute -> re-executed on the next load).
+if _ws_common is not None and getattr(_ws_common, "__ws_common_mtime", None) != _common_mtime:
+    _ws_common = None
 if _ws_common is None:
+    _spec = importlib.util.spec_from_file_location("_watch_skill_common", _common_path)
     _ws_common = importlib.util.module_from_spec(_spec)
     sys.modules["_watch_skill_common"] = _ws_common
     _spec.loader.exec_module(_ws_common)
+    _ws_common.__ws_common_mtime = _common_mtime
 
 arg_int = _ws_common.arg_int
 arg_str = _ws_common.arg_str
@@ -60,5 +70,7 @@ class WsSearch(Tool):
                 message="**ws_search** needs a non-empty `query`.",
                 break_loop=False,
             )
-        report = ws_search(query=query, limit=arg_int(args, "limit", 10))
+        report = await asyncio.to_thread(
+            ws_search, query=query, limit=arg_int(args, "limit", 10)
+        )
         return Response(message=report, break_loop=False)

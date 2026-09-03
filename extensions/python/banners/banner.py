@@ -16,6 +16,8 @@ The banner:
 
 from __future__ import annotations
 
+import asyncio
+
 import json
 import shutil
 import subprocess
@@ -87,9 +89,9 @@ class WatchSkillBanner(Extension):
 
     async def execute(self, banners: list = [], frontend_context: dict = {}, **kwargs):
         try:
-            installed = _cli_installed()
+            installed = await asyncio.to_thread(_cli_installed)
             if installed:
-                n_videos = _library_count()
+                n_videos = await asyncio.to_thread(_library_count)
                 label = "Watch Skill ready"
                 if n_videos is not None:
                     label = f"Watch Skill · {n_videos} videos"

@@ -37,7 +37,7 @@ runtime via `uv tool install` and runs as a side-car MCP server.
 | **API endpoints** | `api/*.py` (5 handlers) | `/api/plugins/watch-skill/{status,doctor,library,setup,mcp_config}`. |
 | **Settings UI** | `webui/config.html` | Card under Agent Zero -> Settings -> Plugins -> Watch Skill. |
 | **Auxiliary skills** | `skills/{watching-videos,asking-with-evidence,the-loop,learning-from-mistakes}/SKILL.md` | 4 a0 skills. |
-| **WebUI** | `extensions/webui/page-head/watch-skill-help.js` + `extensions/python/banners/banner.py` | Topbar status chip + help popover. |
+| **WebUI** | `extensions/python/banners/banner.py` | Topbar status chip (live status surface; the old page-head JS was never loaded by the framework and was removed in v1.1.1). |
 | **Hooks** | `hooks.py` (plugin root) | `install` / `pre_update` / `uninstall` + `get_plugin_config` / `save_plugin_config`. |
 
 ---

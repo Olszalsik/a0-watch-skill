@@ -6,7 +6,7 @@ Health snapshot for the watch-skill plugin:
   - whether the MCP server config is registered with Agent Zero
   - how many videos are in the local index
 
-Used by the WebUI status chip (extensions/webui/page-head/) and the plugin
+Used by the WebUI status chip (extensions/python/banners/banner.py) and the plugin
 card in Settings → Plugins.
 
 v1.1.0 re-port:
@@ -20,6 +20,8 @@ v1.1.0 re-port:
 """
 
 from __future__ import annotations
+
+import asyncio
 
 import json
 import shutil
@@ -96,6 +98,17 @@ def _settings_mcp_registered() -> bool:
         return False
 
 
+def _plugin_version() -> str:
+    try:
+        from helpers import plugins as framework_plugins
+
+        return str(
+            getattr(framework_plugins.get_plugin_meta("watch-skill"), "version", "")
+            or "unknown"
+        )
+    except Exception:
+        return "unknown"
+
 def _ui_flags() -> dict:
     """`ui.*` plugin config, for the WebUI chip/help-button toggles."""
     try:
@@ -129,12 +142,23 @@ class Status(ApiHandler):
         payload = {
             "ok": True,
             "plugin": "watch-skill",
-            "version": "1.1.0",
+            # v1.1.1: read from plugin.yaml -- a hardcoded string drifts
+            # out of date on every bump.
+            "version": _plugin_version(),
             "cli_installed": cli is not None,
             "cli_path": cli,
-            "cli_version": _cached("cli_version", _cli_version),
-            "mcp_registered": _cached("mcp_registered", _settings_mcp_registered),
-            "indexed_videos": _cached("indexed_count", _indexed_count),
+            # v1.1.1: _cli_version/_indexed_count spawn subprocesses -- run
+            # _cached (and the subprocess inside it) on a worker thread so
+            # they never block the event loop.
+            "cli_version": await asyncio.to_thread(
+                _cached, "cli_version", _cli_version
+            ),
+            "mcp_registered": _cached(
+                "mcp_registered", _settings_mcp_registered
+            ),
+            "indexed_videos": await asyncio.to_thread(
+                _cached, "indexed_count", _indexed_count
+            ),
             "ui": _ui_flags(),
         }
         payload["ready"] = bool(payload["cli_installed"])
