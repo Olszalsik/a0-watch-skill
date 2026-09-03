@@ -150,11 +150,15 @@ async def run_cli_async(*args, **kwargs) -> dict[str, Any]:
     """Awaitable run_cli: offload the blocking subprocess to a worker thread.
 
     v1.1.1: run_cli is a blocking subprocess.run -- the framework awaits
-    Tool.execute() directly on the server event loop (agent.py), so a
-    foreground ws_watch (600s) or an LLM-supplied huge `timeout` on
-    ws_loop froze the ENTIRE server (all chats, WS heartbeats, WebUI)
-    for the duration. Every async entry point must call this wrapper
-    (or its own asyncio.to_thread) instead of run_cli directly.
+    Tool.execute() directly on the server event loop (agent.py:1212), so a
+    blocking call inside execute() froze the ENTIRE server (all chats, WS
+    heartbeats, WebUI) for the duration.
+
+    v1.1.2 docstring correction: the plugin's tools do NOT call this
+    wrapper -- each tool offloads at its own layer (e.g. WsLoop.execute
+    awaits asyncio.to_thread around the whole sync ``ws_loop`` function,
+    which internally calls run_cli). Kept as a convenience for external
+    callers that want to await a single run_cli from async code.
     """
     return await asyncio.to_thread(run_cli, *args, **kwargs)
 

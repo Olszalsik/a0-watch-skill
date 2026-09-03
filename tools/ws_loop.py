@@ -236,6 +236,13 @@ class WsLoop(Tool):
         timeout = _coerce_float(args.get("timeout"), 600.0)
         if timeout <= 0:
             timeout = 600.0
+        # v1.1.2: clamp the LLM-supplied timeout. The to_thread offload
+        # keeps the event loop responsive, but an unbounded timeout still
+        # pins a worker thread (and the tool call) for as long as the LLM
+        # asked -- e.g. timeout=999999 would hang the tool result until
+        # restart. The CLI's own per-loop timeout stays authoritative for
+        # legitimate long runs; 3600s covers any sane iteration loop.
+        timeout = min(timeout, 3600.0)
         script = _coerce_script(args.get("script"))
 
         report = await asyncio.to_thread(

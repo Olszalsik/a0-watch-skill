@@ -52,6 +52,18 @@ The v1.0.0 tree was written against a v2.2-era contract that no framework versio
 - **F16** — ws_loop numeric args coerced (`_coerce_float/_coerce_int/_coerce_script`).
 - **F17** — README/AGENTS.md doc URLs corrected to `/api/plugins/watch-skill/<handler>`.
 
+## v1.1.2 — Third-pass Fixes (2026-09-03)
+
+- **`ws_loop` timeout clamp (LOW)**: `WsLoop.execute` coerced but never
+  clamped the LLM-supplied `timeout`. The v1.1.1 `to_thread` offload keeps
+  the event loop responsive, but `timeout=999999` still pinned a worker
+  thread (and the tool result) until restart. Now capped at 3600s.
+- **`run_cli_async` docstring correction (LOW)**: it claimed "every async
+  entry point must call this wrapper" — in reality NO caller uses it (each
+  tool offloads at its own layer, e.g. `WsLoop.execute` awaits
+  `asyncio.to_thread` around the whole sync `ws_loop`). Docstring now
+  states the actual offload points; helper kept for external callers.
+
 ## v1.1.1 — Second-pass Audit Fixes (2026-09-03)
 
 - **Blocking subprocesses off the event loop (HIGH)**: every ws_* tool,

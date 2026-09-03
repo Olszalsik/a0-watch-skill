@@ -23,7 +23,7 @@
 #   skills/                         -> auxiliary a0 skills (served via _skills)
 name: watch_skill
 title: Watch Skill — Video Intelligence for Agents
-version: 1.1.1
+version: 1.1.2
 description: |
   Give any Agent Zero session a video input: watch, index, ask, and iterate
   (THE LOOP). The watch-skill MCP server contributes 23 video tools; native
