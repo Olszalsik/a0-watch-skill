@@ -1,5 +1,7 @@
 # Watch Skill - Agent Zero Plugin
 
+[![Agent Zero plugin](https://img.shields.io/badge/Agent%20Zero-plugin-4f46e5)](https://github.com/agent0ai/a0-plugins)
+
 > **Watch. Remember. Fix. Verify.**
 > Give any Agent Zero session a video input: watch, index, ask, and iterate
 > (THE LOOP). 39 MCP tools + a CLI + REST + native Python wrappers, with a
@@ -11,6 +13,14 @@ This is an **Agent Zero plugin port** of the open-source
 [oxbshw/watch-skill](https://github.com/oxbshw/watch-skill) project.
 It does **not** vendor the upstream Python engine - that is installed at
 runtime via `uv tool install` and runs as a side-car MCP server.
+
+| | |
+|---|---|
+| **Plugin version** | 1.2.0 (see `plugin.yaml`) |
+| **Plugin id** | `watch_skill` |
+| **Engine required** | watch-skill engine 1.4.x |
+| **License** | MIT |
+| **Index listing** | [a0-plugins](https://github.com/agent0ai/a0-plugins) `plugins/watch_skill/` |
 
 ---
 
