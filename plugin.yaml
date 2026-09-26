@@ -1,50 +1,58 @@
-# watch-skill plugin manifest.
+# watch_skill plugin manifest.
 #
-# v1.1.0 re-port: the framework parses ONLY the keys below (helpers/plugins.py
-# PluginMetadata): name, title, description, version, settings_sections,
-# per_project_config, per_agent_config, always_enabled. The v1.0.0 keys —
-# capabilities, mcp_servers, config, hooks, initialize, self_diagnose, agents,
-# a0_skills, commands, webui, api, tools, settings_ui — were decorative (never
-# read by any framework version) and are documented here as comments instead.
+# The framework parses ONLY these keys (helpers/plugins.py PluginMetadata):
+# name, title, description, version, settings_sections, per_project_config,
+# per_agent_config, always_enabled. There is no model_config, so anything else
+# is silently dropped at runtime -- keep engine requirements in prose (below),
+# never in a manifest key. `min_framework_version` is NOT read by anything.
+#
+# settings_sections drives discoverability: the Settings tab renders a button
+# for a plugin only when the section is listed AND webui/config.html exists.
+# Only `agent` and `external` actually mount that subsection, so `agent` is
+# the only value that makes this plugin's settings panel reachable.
 #
 # What this plugin actually ships (all discovered by directory convention):
 #   tools/                          -> native tools (one Tool subclass per file)
 #   prompts/agent.system.tool.*.md  -> tool prompts for the system prompt
-#   api/*.py                        -> /api/plugins/watch-skill/<file> handlers
+#   api/*.py                        -> /api/plugins/watch_skill/<file> handlers
 #   extensions/python/banners/      -> WebUI banner (topbar status chip)
 #   extensions/python/system_prompt/-> persona injection for the sub-agent
-#   webui/config.html               -> Settings -> Plugins -> watch-skill panel
+#   webui/config.html               -> Settings -> Plugins -> watch_skill panel
 #   commands/*.command.yaml         -> slash commands /watch /ws-doctor
 #                                      /ws-library /ws-stats (via _commands)
-#   agents/watch-skill-agent/       -> sub-agent profile (name/title/description)
+#   agents/watch_skill-agent/       -> sub-agent profile (name/title/description)
 #   hooks.py                        -> install/uninstall + config hooks; the
 #                                      install hook registers the watch-skill
 #                                      MCP server in usr/settings.json
 #   skills/                         -> auxiliary a0 skills (served via _skills)
 name: watch_skill
 title: Watch Skill — Video Intelligence for Agents
-version: 1.1.2
+version: 1.2.0
 description: |
   Give any Agent Zero session a video input: watch, index, ask, and iterate
-  (THE LOOP). The watch-skill MCP server contributes 23 video tools; native
+  (THE LOOP). The watch-skill MCP server contributes 39 video tools; native
   ws_* tools wrap the CLI as a fallback, with slash commands (/watch,
   /ws-doctor, /ws-library, /ws-stats), a WebUI status chip + settings panel,
   and a "watch-skill video analyst" sub-agent. Local-first by default —
   transcription, OCR, and search work without an API key; visual Q&A is
-  opt-in per provider.
+  opt-in per provider. Requires watch-skill engine 1.4.x.
 
 # CLI install (the plugin's install hook only registers the MCP server;
 # the CLI itself is installed separately, or automatically when
 # install.auto_install=true in Settings -> Plugins -> watch-skill):
-#   uv tool install "watch-skill[all] @ git+https://github.com/oxbshw/watch-skill"
-#   fallbacks: pipx install ... / pip install --user ...
+#   uv tool install 'watch-skill[standard] @ git+https://github.com/oxbshw/watch-skill'
+#   fallback: pipx install ...
+# The [standard] extra is MANDATORY since engine 1.4.0: a bare install
+# ships no frame extraction, no retrieval and no MCP server, and every
+# `watch` call then fails with perceive.missing_dependency. [transcribe]
+# and [vlm] were never declared extras upstream; do not pass them.
 
-# API handlers (route = /api/plugins/watch-skill/<file basename>):
-#   api/status.py      GET  /api/plugins/watch-skill/status
-#   api/doctor.py      POST /api/plugins/watch-skill/doctor
-#   api/library.py     GET  /api/plugins/watch-skill/library
-#   api/setup.py       POST /api/plugins/watch-skill/setup
-#   api/mcp_config.py  GET  /api/plugins/watch-skill/mcp_config
+# API handlers (route = /api/plugins/watch_skill/<file basename>):
+#   api/status.py      GET  /api/plugins/watch_skill/status
+#   api/doctor.py      POST /api/plugins/watch_skill/doctor
+#   api/library.py     GET  /api/plugins/watch_skill/library
+#   api/setup.py       POST /api/plugins/watch_skill/setup
+#   api/mcp_config.py  GET  /api/plugins/watch_skill/mcp_config
 
 # Native tools (one per file in tools/, no MCP required):
 #   ws_doctor ws_list ws_ask ws_watch ws_status ws_search ws_moment
@@ -55,3 +63,9 @@ description: |
 #   /ws-doctor [--no-fix]
 #   /ws-library [question...]
 #   /ws-stats
+version: 1.2.0
+settings_sections:
+  - agent
+per_project_config: false
+per_agent_config: false
+always_enabled: false

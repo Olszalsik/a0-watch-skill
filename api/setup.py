@@ -1,4 +1,4 @@
-"""POST /api/plugins/watch-skill/setup
+"""POST /api/plugins/watch_skill/setup
 
 Optionally installs the watch-skill Python CLI on the host and registers
 the MCP server with Agent Zero. Defaults are conservative:
@@ -57,7 +57,7 @@ def _read_plugin_config() -> dict:
     try:
         from helpers import plugins as framework_plugins
 
-        cfg = framework_plugins.get_plugin_config("watch-skill")
+        cfg = framework_plugins.get_plugin_config("watch_skill")
         if isinstance(cfg, dict):
             return cfg
     except Exception:
@@ -73,8 +73,22 @@ def _read_plugin_config() -> dict:
     return {}
 
 
-def _install_cli(extras: str = "[all]") -> dict:
-    """Try to install the watch-skill CLI; return a per-step report."""
+def _install_cli(extras: str = "[standard]") -> dict:
+    """Install the watch-skill CLI into an isolated tool env; per-step report.
+
+    `extras` defaults to `[standard]`. Since engine 1.4.0 a bare
+    `watch-skill` install contains no frame extraction, no retrieval and no
+    MCP server, so `watch` fails with `perceive.missing_dependency`; the docs
+    specify `[standard]`. `[all]` is not a declared extra. `[transcribe]`
+    and `[vlm]` were never declared extras either — do not pass them.
+
+    There is deliberately NO `pip install` fallback. Hooks run in the
+    framework runtime, so `sys.executable -m pip install --user` targets the
+    framework venv's user site, whose bin directory is not on PATH. That
+    step used to "succeed", report `{"ok": True, "via": "pip"}`, and leave
+    `find_cli()` (shutil.which) still returning None — so every tool kept
+    reporting `config.cli_missing` against a green install report.
+    """
     steps: list[dict[str, Any]] = []
     if _which_or_none("watch-skill"):
         return {"ok": True, "already_installed": True, "steps": steps}
@@ -95,7 +109,7 @@ def _install_cli(extras: str = "[all]") -> dict:
         except Exception as e:
             steps.append({"tool": "uv", "ok": False, "error": str(e)})
 
-    # Fallback: pipx
+    # Fallback: pipx (also an isolated tool env, so the binary lands on PATH)
     if _which_or_none("pipx"):
         try:
             proc = subprocess.run(
@@ -110,28 +124,18 @@ def _install_cli(extras: str = "[all]") -> dict:
         except Exception as e:
             steps.append({"tool": "pipx", "ok": False, "error": str(e)})
 
-    # Final fallback: pip --user via the running interpreter
-    # (python3 is not guaranteed to exist — notably on Windows).
-    try:
-        proc = subprocess.run(
-            [sys.executable, "-m", "pip", "install", "--user", pkg],
-            capture_output=True, text=True, timeout=300,
-        )
-        steps.append(
-            {"tool": "pip", "ok": proc.returncode == 0,
-             "stdout": proc.stdout[-500:], "stderr": proc.stderr[-500:]}
-        )
-        if proc.returncode == 0:
-            return {"ok": True, "via": "pip", "steps": steps}
-    except Exception as e:
-        steps.append({"tool": "pip", "ok": False, "error": str(e)})
-
     return {
         "ok": False,
         "error": "config.cli_install_failed",
         "fix": (
-            "Install the watch-skill CLI manually: "
-            "`uv tool install 'watch-skill[all] @ git+https://github.com/oxbshw/watch-skill'`"
+            "Install the watch-skill CLI manually into an isolated env so the "
+            "binary is on PATH:\n"
+            "  uv tool install 'watch-skill[standard] @ git+https://github.com/oxbshw/watch-skill'\n"
+            "  # or: pipx install '<same spec>'\n"
+            "The [standard] extra is required; a bare install has no frames, "
+            "no retrieval and no MCP server. There is no pip fallback on "
+            "purpose: installing into the framework venv leaves the binary "
+            "off PATH, where the tools could never find it."
         ),
         "steps": steps,
     }
@@ -181,7 +185,7 @@ def _configure_vision(provider: str, api_key_env: str) -> dict:
 
         cfg = _read_plugin_config()
         cfg.setdefault("vision", {}).update(vision)
-        framework_plugins.save_plugin_config("watch-skill", "", "", cfg)
+        framework_plugins.save_plugin_config("watch_skill", "", "", cfg)
         return {
             "ok": True,
             "provider": provider,
@@ -193,7 +197,7 @@ def _configure_vision(provider: str, api_key_env: str) -> dict:
 
 
 class Setup(ApiHandler):
-    """POST /api/plugins/watch-skill/setup → per-step report."""
+    """POST /api/plugins/watch_skill/setup → per-step report."""
 
     async def process(self, input_data, request) -> dict:
         body: dict = input_data if isinstance(input_data, dict) else {}
@@ -209,7 +213,7 @@ class Setup(ApiHandler):
 
         if install or shutil.which("watch-skill") is None:
             result = await asyncio.to_thread(
-                _install_cli, install_cfg.get("install_extras", "[all]")
+                _install_cli, install_cfg.get("install_extras", "[standard]")
             )
             report["steps"].append({"name": "install_cli", **result})
         else:

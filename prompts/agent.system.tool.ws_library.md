@@ -1,6 +1,6 @@
 ### ws_library
 ask a question across the whole video library, or show its overview (cross-video memory)
-args: `question` or `overview` (json boolean true), optional `k_videos` (how many videos to consult, default from config)
+args: `question` or `overview` (json boolean true), optional `k_videos` (how many videos to consult, default from config; sent to the engine as `library ask --videos N`)
 - with `question`: markdown synthesis with per-video timestamp citations
 - with `overview=true`: library overview (videos indexed, hours, note counts, recurring entities, lifetime token savings)
 orient with `overview=true` first when a question spans multiple videos, then synthesize with a `question`

@@ -139,69 +139,81 @@ def ws_loop(
     if max_iterations is None or max_iterations < 0:
         max_iterations = _default_max_iterations()
 
-    args: list[str] = []
+    base: list[str]
+    flags: list[tuple[str, str]]
+    probe: list[str]
     json_out = True
 
     if mode == "start":
         if not target or not pass_criteria:
             return "**ws_loop(start)** needs `target` and `pass_criteria`."
-        args += [
-            "start", target, pass_criteria,
-            "--max-iterations", str(max_iterations),
-            "--duration", str(duration),
+        base = ["loop", "start", target, pass_criteria]
+        probe = ["loop", "start"]
+        flags = [
+            ("--max-iterations", str(max_iterations)),
+            ("--duration", str(duration)),
         ]
         if script:
-            args += ["--script", _json.dumps(script)]
+            flags.append(("--script", _json.dumps(script)))
     elif mode == "iterate":
         if not loop_id:
             return "**ws_loop(iterate)** needs `loop_id` (from `loop_start`)."
-        args += ["iterate", loop_id]
+        base, flags = ["loop", "iterate", loop_id], []
+        probe = ["loop", "iterate"]
     elif mode == "status":
         if not loop_id:
             return "**ws_loop(status)** needs `loop_id`."
-        args += ["status", loop_id]
+        base, flags = ["loop", "status", loop_id], []
+        probe = ["loop", "status"]
     elif mode == "capture":
         if not target:
             return "**ws_loop(capture)** needs `target`."
-        args += ["capture", target, "--duration", str(duration)]
+        # `capture` is a TOP-LEVEL engine command, not a `loop` subcommand
+        # (the loop group is start|video-gen|game|monitor|iterate|status|viewer).
+        base = ["capture", target]
+        probe = ["capture"]
+        flags = [("--duration", str(duration))]
     elif mode == "video-gen":
         if not spec or not generator_cmd or not output:
             return (
                 "**ws_loop(video-gen)** needs `spec`, `generator_cmd`, and "
                 "`output`."
             )
-        args += [
-            "video-gen",
-            "--spec", spec,
-            "--cmd", generator_cmd,
-            "--output", output,
-            "--max-iterations", str(max_iterations),
-            "--timeout", str(timeout),
+        base = ["loop", "video-gen"]
+        probe = ["loop", "video-gen"]
+        flags = [
+            ("--spec", spec),
+            ("--cmd", generator_cmd),
+            ("--output", output),
+            ("--max-iterations", str(max_iterations)),
+            ("--timeout", str(timeout)),
         ]
         if pass_criteria:
-            args += ["--pass-criteria", pass_criteria]
+            flags.append(("--pass-criteria", pass_criteria))
         if workdir:
-            args += ["--workdir", workdir]
+            flags.append(("--workdir", workdir))
     elif mode == "game":
         if not target or not pass_criteria:
             return "**ws_loop(game)** needs `target` and `pass_criteria`."
-        args += [
-            "game", target, pass_criteria,
-            "--duration", str(duration),
-            "--max-iterations", str(max_iterations),
+        base = ["loop", "game", target, pass_criteria]
+        probe = ["loop", "game"]
+        flags = [
+            ("--duration", str(duration)),
+            ("--max-iterations", str(max_iterations)),
         ]
         if run_cmd:
-            args += ["--run-cmd", run_cmd]
+            flags.append(("--run-cmd", run_cmd))
         if script:
-            args += ["--script", _json.dumps(script)]
+            flags.append(("--script", _json.dumps(script)))
     elif mode == "monitor":
         if not source or not condition:
             return "**ws_loop(monitor)** needs `source` and `condition`."
-        args += [
-            "monitor", source, condition,
-            "--interval", str(interval),
-            "--max-checks", str(max_checks),
-            "--sample-seconds", str(sample_seconds),
+        base = ["loop", "monitor", source, condition]
+        probe = ["loop", "monitor"]
+        flags = [
+            ("--interval", str(interval)),
+            ("--max-checks", str(max_checks)),
+            ("--sample-seconds", str(sample_seconds)),
         ]
     else:
         return (
@@ -209,9 +221,13 @@ def ws_loop(
             "start, iterate, status, capture, video-gen, game, monitor."
         )
 
+    argv, dropped = _ws_common.build_args(base, flags, probe=probe)
     return format_for_llm(
-        run_cli(["loop", *args], timeout=int(timeout) + 60, json_output=json_out),
+        run_cli(argv, timeout=int(timeout) + 60, json_output=json_out),
         max_chars=20000,
+    ) + _ws_common.dropped_flags_notice(
+        dropped,
+        "Check `watch-skill loop <mode> --help` for the options this engine build accepts.",
     )
 
 

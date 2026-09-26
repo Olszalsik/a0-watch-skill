@@ -43,17 +43,30 @@ run_cli = _ws_common.run_cli
 def ws_moment(video: str, timestamp: str, window: float = 10.0) -> str:
     """Zoom into one specific moment of a watched video.
 
+    The engine exposes this ONLY on the MCP surface (`get_moment`); there is
+    no `watch-skill moment` CLI subcommand in 1.4.x, so shelling out would
+    just return a Typer usage error. This tool therefore reports the correct
+    path instead of burning a subprocess, and the prompt tells the model to
+    prefer the MCP tool.
+
     Args:
         video: video_id or original source.
         timestamp: center of the window (`SS`, `MM:SS`, or `HH:MM:SS`).
         window: seconds of context around the timestamp (default 10).
 
     Returns:
-        Dense frames + transcript + OCR around the timestamp.
+        A short explanation of which tool to use (the MCP `get_moment`).
     """
-    return format_for_llm(
-        run_cli(["moment", video, timestamp, "--window", str(window)], timeout=60),
-        max_chars=12000,
+    return (
+        "**ws_moment** has no CLI fallback: the engine provides moment zoom "
+        "only through its MCP tool `get_moment`, and the installed CLI has no "
+        "`moment` subcommand.\n\n"
+        "Use the MCP tool instead:\n"
+        f"- `get_moment(video=\"{video}\", timestamp=\"{timestamp}\", window={window})`\n\n"
+        "It returns dense frames + transcript + OCR around the timestamp. "
+        "If the MCP server is not registered, enable it in Settings -> MCP, or "
+        "run `/ws-doctor`. For a question about that moment rather than raw "
+        "evidence, `ws_ask` works over the CLI."
     )
 
 

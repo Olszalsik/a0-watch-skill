@@ -27,11 +27,22 @@ import sys
 from pathlib import Path
 from typing import Any
 
-PLUGIN_NAME = "watch-skill"
+# Plugin identity used for EVERY framework config/lifecycle lookup.
+# MUST equal plugin.yaml's `name` and the installed directory name, because
+# helpers.plugins.determine_plugin_asset_path() resolves
+# `usr/plugins/<plugin_name>/config.json` from the string passed in. A
+# mismatch does not raise -- it silently reads a non-existent directory and
+# falls back to defaults, so `save_plugin_config` writes to a path nobody
+# reads. The store index also requires `^[a-z0-9_]+$` (no dashes).
+PLUGIN_NAME = "watch_skill"
 PLUGIN_DIR = Path(__file__).resolve().parent
 
 # MCP server registration (shape matches helpers.mcp_handler.MCPConfig:
 # {"mcpServers": {"<name>": {"command": ..., "args": [...]}}}).
+# Independent of PLUGIN_NAME: this is the key written into the user's
+# mcp_servers setting and the namespace the LLM sees. Kept hyphenated so
+# existing installs keep working and uninstall() can find the entry it
+# registered. Do NOT "fix" this to match PLUGIN_NAME.
 MCP_SERVER_NAME = "watch-skill"
 MCP_SERVER_CONFIG = {"command": "watch-skill", "args": ["serve"], "env": {}}
 
@@ -134,7 +145,7 @@ def install() -> dict:
         report["cli_missing"] = True
         report["install_hint"] = (
             "uv tool install "
-            "'watch-skill[all] @ git+https://github.com/oxbshw/watch-skill'"
+            "'watch-skill[standard] @ git+https://github.com/oxbshw/watch-skill'"
         )
         # v1.1.1: read the MERGED plugin config (default_config.yaml
         # deep-merged under config.json via our own get_plugin_config hook)
@@ -154,7 +165,7 @@ def install() -> dict:
             try:
                 _setup = _import_setup_module()
                 result = _setup._install_cli(
-                    cfg.get("install", {}).get("install_extras", "[all]")
+                    cfg.get("install", {}).get("install_extras", "[standard]")
                 )
                 report["auto_install"] = result
                 if not result.get("ok"):
@@ -168,7 +179,7 @@ def install() -> dict:
         else:
             _log(
                 "watch-skill CLI not found on PATH. Install with: "
-                "uv tool install 'watch-skill[all] @ git+https://github.com/oxbshw/watch-skill' "
+                "uv tool install 'watch-skill[standard] @ git+https://github.com/oxbshw/watch-skill' "
                 "(or set install.auto_install=true in the plugin settings)."
             )
 

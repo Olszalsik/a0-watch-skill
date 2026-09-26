@@ -1,4 +1,4 @@
-"""GET /api/plugins/watch-skill/mcp_config
+"""GET /api/plugins/watch_skill/mcp_config
 
 Returns the `mcpServers` JSON snippet Agent Zero needs to register the
 watch-skill MCP server. Used by both the auto-enable path and the
@@ -38,7 +38,7 @@ def _is_already_registered() -> bool:
 
 
 class McpConfig(ApiHandler):
-    """GET /api/plugins/watch-skill/mcp_config → JSON."""
+    """GET /api/plugins/watch_skill/mcp_config → JSON."""
 
     @classmethod
     def get_methods(cls) -> list[str]:

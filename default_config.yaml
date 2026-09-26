@@ -1,46 +1,41 @@
-# Default configuration for the watch-skill plugin
-# Override values in Agent Zero Settings → Plugins → watch-skill.
+# Default configuration for the watch_skill plugin
+# Override values in Agent Zero Settings -> Plugins -> watch_skill.
+#
+# Every key below has a live consumer in tools/, api/, hooks.py or the
+# banners extension. Keys with no consumer were removed rather than left
+# as decoration: a settings toggle that silently does nothing is worse
+# than no toggle, because it reads as "configured".
 
 install:
-  auto_install: false          # ask before running `uv tool install`
-  prefer_uv: true              # prefer `uv tool install`
-  fallback_pipx: true          # fall back to `pipx install`
-  fallback_pip: true           # final fallback to `pip install --user`
-  install_extras: "[all]"      # which pip extras to install (e.g. "[mcp,perceive,ocr]")
+  # Run the CLI installer from the install hook. Off by default: it is a
+  # network install of a third-party package, so it is opt-in.
+  auto_install: false
+  # pip extras to install. [standard] is REQUIRED since engine 1.4.0 --
+  # a bare install has no frame extraction, no retrieval and no MCP server,
+  # and every `watch` then fails with perceive.missing_dependency.
+  # [all] is not a declared extra; [transcribe] and [vlm] never were.
+  install_extras: "[standard]"
 
 vision:
-  provider: auto               # auto | anthropic | openai | gemini | openrouter | ollama | none
-  model: ""                    # override single model name
-  cheap_model: ""              # for bulk perception (text/light)
-  strong_model: ""             # for final verification (heavier)
-  env_var_passthrough: true    # forward ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY / etc.
+  # Applied to the CLI subprocess env as WATCHSKILL_VISION_PROVIDER /
+  # WATCHSKILL_VISION_MODEL (see _common.apply_vision_env).
+  # auto | anthropic | openai | gemini | openrouter | ollama | none
+  provider: auto
+  # Optional single-model override; empty lets the engine route by tier.
+  model: ""
+  # Name of the env var holding the provider key, for the settings UI to
+  # report whether a key is present. Never the key value itself.
+  api_key_env: "WATCHSKILL_ANTHROPIC_API_KEY"
 
 index:
-  storage_dir: "~/.watch-skill"
-  auto_mount_in_docker: true   # if Agent Zero runs in Docker, mount ~/.watch-skill back to the host
-  library_chunk_k_videos: 5    # default k_videos for library_synthesize
-
-mcp:
-  expose_tools_in_prompt: true # surface the 23 MCP tools to the LLM in the system prompt
-  tool_blacklist: []           # MCP tool names to hide from the LLM (rare)
-  spawn_timeout_s: 30          # how long to wait for the MCP server to come up
+  # How many videos `library ask` consults. Passed to the engine as
+  # `library ask --videos N` (the engine flag and this key differ by name).
+  library_chunk_k_videos: 5
 
 loop:
   default_max_iterations: 5
   default_duration: 8.0
-  record_proof: true           # render before/after MP4+GIF on pass
-  proof_format: "mp4,gif"      # proof output formats
-
-cost:
-  policy: auto                 # auto | cheapest | quality_first | offline_only
-  token_budget_per_call: 0     # 0 = unlimited; positive = cap per call
-  semantic_cache: true         # reuse answers for near-duplicate questions
 
 ui:
-  show_status_chip: true       # show "🎬 watch-skill ready" chip in WebUI topbar
-  show_help_button: true       # add a small help button next to the status chip
-
-logging:
-  level: info                  # debug | info | warn | error
-  log_cli_calls: false         # log every `watch-skill ...` CLI invocation
-  redact_secrets: true         # never log API keys
+  show_status_chip: true       # show the watch-skill status chip in the WebUI topbar
+  show_help_button: true       # include the help button in the chip

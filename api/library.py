@@ -1,4 +1,4 @@
-"""GET /api/plugins/watch-skill/library
+"""GET /api/plugins/watch_skill/library
 
 Returns the `watch-skill library overview` JSON — videos indexed, hours,
 note counts, recurring entities, recent additions, and the lifetime
@@ -20,7 +20,7 @@ from helpers.api import ApiHandler  # type: ignore
 
 
 class Library(ApiHandler):
-    """GET /api/plugins/watch-skill/library → JSON."""
+    """GET /api/plugins/watch_skill/library → JSON."""
 
     @classmethod
     def get_methods(cls) -> list[str]:

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 _INSTALL_LINE = (
     "uv tool install "
-    "'watch-skill[all] @ git+https://github.com/oxbshw/watch-skill'"
+    "'watch-skill[standard] @ git+https://github.com/oxbshw/watch-skill'"
 )
 
 

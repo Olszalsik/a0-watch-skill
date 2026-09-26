@@ -46,16 +46,22 @@ def ws_report_mistake(
     correction: str,
     session_id: str = "",
 ) -> str:
-    """Report a wrong video answer so the engine stores a local lesson."""
+    """Report a wrong video answer so the engine stores a local lesson.
+
+    Engine 1.4.x renamed the CLI surface: `report-mistake` is the MCP tool
+    name only, and the CLI spells it `lessons add VIDEO QUESTION WRONG
+    CORRECTION`. The session flag is `--session` (not `--session-id`).
+    """
     args = [
-        "report-mistake",
+        "lessons",
+        "add",
         video,
-        "--question", question,
-        "--wrong", wrong_answer,
-        "--correction", correction,
+        question,
+        wrong_answer,
+        correction,
     ]
     if session_id:
-        args += ["--session-id", session_id]
+        args += ["--session", session_id]
     return format_for_llm(
         run_cli(args, timeout=60, json_output=True),
         max_chars=8000,

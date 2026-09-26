@@ -40,6 +40,8 @@ arg_int = _ws_common.arg_int
 arg_str = _ws_common.arg_str
 format_for_llm = _ws_common.format_for_llm
 run_cli = _ws_common.run_cli
+build_args = _ws_common.build_args
+dropped_flags_notice = _ws_common.dropped_flags_notice
 
 
 def ws_watch(
@@ -75,26 +77,55 @@ def ws_watch(
         OCR, transcript, and the answer (if a question was given). For
         background mode, returns the job_id and instructions to poll.
     """
-    cmd = ["batch"] if batch else ["watch"]
-    cmd.append(source)
+    # Engine 1.4.x `watch` accepts: --start --end --max-frames --resolution
+    # --timestamps --transcript-only --no-ocr --no-whisper --cloud-stt
+    # --whisper-model --diarize --word-timestamps --duration --out-dir
+    # --no-cache --index/--no-index --detail.
+    # It has NO --question and NO --background. Both are therefore offered
+    # through build_args(), which drops them against the installed engine
+    # and reports the drop, instead of emitting a usage error (which is what
+    # the previous hard-coded argv did for every question-carrying watch).
+    base = ["batch"] if batch else ["watch"]
+    base.append(source)
+    flags: list[tuple[str, str]] = []
     if question:
-        cmd += ["--question", question]
+        flags.append(("--question", question))
     if start:
-        cmd += ["--start", start]
+        flags.append(("--start", start))
     if end:
-        cmd += ["--end", end]
+        flags.append(("--end", end))
     if max_frames > 0:
-        cmd += ["--max-frames", str(max_frames)]
+        flags.append(("--max-frames", str(max_frames)))
     if transcript_only:
-        cmd.append("--transcript-only")
+        flags.append(("--transcript-only", ""))
     if background:
-        cmd.append("--background")
+        flags.append(("--background", ""))
     if batch and limit:
-        cmd += ["--limit", str(limit)]
+        flags.append(("--limit", str(limit)))
 
-    timeout = 30 if background else 600  # backgrounding returns instantly
+    argv, dropped = build_args(base, flags, probe=base[:1])
+    actually_background = "--background" not in dropped and background
+
+    # A foreground watch can legitimately take minutes. The old code used a
+    # 30s timeout whenever background was requested, which is only correct
+    # if the engine actually backgrounded the job; when the flag is dropped
+    # the watch is in fact synchronous, so give it the full window instead
+    # of timing out on work that is progressing.
+    timeout = 30 if actually_background else 600
+    guidance = (
+        "The question is not answered by this tool: watch with ws_watch (no "
+        "question), then call ws_ask with the question against the resulting "
+        "video_id. For a backgrounded watch use the MCP `watch_video` tool and "
+        "poll it with MCP `get_status`."
+        if dropped
+        else ""
+    )
     return format_for_llm(
-        run_cli(cmd, timeout=timeout, json_output=background), max_chars=16000
+        run_cli(argv, timeout=timeout, json_output=actually_background),
+        max_chars=16000,
+    ) + dropped_flags_notice(
+        dropped,
+        guidance + " Check `watch-skill watch --help` for this build's options.",
     )
 
 

@@ -1,7 +1,7 @@
 ### ws_report_mistake
 report a wrong video answer so the engine stores a local lesson (video intelligence)
-args: `video` (required), `question` (required), `wrong_answer` (required), `correction` (required), optional `session_id`
-the engine stores the lesson, applies it to related questions, and where possible re-asks the original question to confirm the fix
+args: `video` (required), `question` (required), `wrong_answer` (required), `correction` (required), optional `session_id` (passed to the engine as `--session`)
+runs the engine's `lessons add` command; the engine stores the lesson, applies it to related questions, and where possible re-asks the original question to confirm the fix
 use it when the user says a video answer was wrong, or when you realize your own video-based response was incorrect
 example:
 ~~~json

@@ -1,4 +1,4 @@
-"""POST /api/plugins/watch-skill/doctor
+"""POST /api/plugins/watch_skill/doctor
 
 Runs `watch-skill doctor` and returns the result as JSON. Optionally
 applies safe self-heals (download ffmpeg / yt-dlp) when the request body
@@ -20,7 +20,7 @@ from helpers.api import ApiHandler  # type: ignore
 
 
 class Doctor(ApiHandler):
-    """POST /api/plugins/watch-skill/doctor — body: `{"fix": true|false}`."""
+    """POST /api/plugins/watch_skill/doctor — body: `{"fix": true|false}`."""
 
     async def process(self, input_data: dict, request) -> dict:
         body: dict[str, Any] = input_data if isinstance(input_data, dict) else {}
@@ -33,7 +33,7 @@ class Doctor(ApiHandler):
                 "error": "config.cli_missing",
                 "fix": (
                     "Install the watch-skill CLI: "
-                    "`uv tool install 'watch-skill[all] @ git+https://github.com/oxbshw/watch-skill'`"
+                    "`uv tool install 'watch-skill[standard] @ git+https://github.com/oxbshw/watch-skill'`"
                 ),
             }
 

@@ -42,6 +42,8 @@ arg_str = _ws_common.arg_str
 format_for_llm = _ws_common.format_for_llm
 load_plugin_config = _ws_common.load_plugin_config
 run_cli = _ws_common.run_cli
+build_args = _ws_common.build_args
+dropped_flags_notice = _ws_common.dropped_flags_notice
 
 
 def ws_library(
@@ -73,13 +75,19 @@ def ws_library(
             "**ws_library** needs a question, or pass `overview=true` to "
             "print the library overview."
         )
+    # Engine 1.4.x spells the count flag `--videos`; the config key and the
+    # tool arg are `k_videos`, so the two names deliberately differ.
+    # build_args() guards against a build that spells it something else.
+    argv, dropped = build_args(
+        ["library", "ask", question],
+        [("--videos", str(k_videos))],
+        probe=["library", "ask"],
+    )
     return format_for_llm(
-        run_cli(
-            ["library", "ask", question, "--k-videos", str(k_videos)],
-            timeout=120,
-            json_output=False,
-        ),
+        run_cli(argv, timeout=120, json_output=False),
         max_chars=16000,
+    ) + dropped_flags_notice(
+        dropped, "Check `watch-skill library ask --help` for this build's options."
     )
 
 

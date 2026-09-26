@@ -1,4 +1,4 @@
-"""GET /api/plugins/watch-skill/status
+"""GET /api/plugins/watch_skill/status
 
 Health snapshot for the watch-skill plugin:
   - whether the `watch-skill` CLI is on PATH
@@ -66,7 +66,10 @@ def _indexed_count() -> int | None:
         return None
     try:
         out = subprocess.run(
-            [cli, "list", "--limit", "0", "--json"],
+            # Engine 1.4.x `list` takes no options; the old `--limit 0`
+            # (meaning "all") is a usage error there, so this probe silently
+            # returned None and the dashboard always reported 0 videos.
+            [cli, "list", "--json"],
             capture_output=True, text=True, timeout=15, check=False,
         )
         if out.returncode == 0 and out.stdout.strip():
@@ -103,7 +106,7 @@ def _plugin_version() -> str:
         from helpers import plugins as framework_plugins
 
         return str(
-            getattr(framework_plugins.get_plugin_meta("watch-skill"), "version", "")
+            getattr(framework_plugins.get_plugin_meta("watch_skill"), "version", "")
             or "unknown"
         )
     except Exception:
@@ -114,7 +117,7 @@ def _ui_flags() -> dict:
     try:
         from helpers import plugins as framework_plugins
 
-        cfg = framework_plugins.get_plugin_config("watch-skill") or {}
+        cfg = framework_plugins.get_plugin_config("watch_skill") or {}
         ui = cfg.get("ui") if isinstance(cfg, dict) else None
         if isinstance(ui, dict):
             return {
@@ -127,7 +130,7 @@ def _ui_flags() -> dict:
 
 
 class Status(ApiHandler):
-    """GET /api/plugins/watch-skill/status → JSON snapshot."""
+    """GET /api/plugins/watch_skill/status → JSON snapshot."""
 
     @classmethod
     def get_methods(cls) -> list[str]:
@@ -141,7 +144,7 @@ class Status(ApiHandler):
         cli = shutil.which("watch-skill")
         payload = {
             "ok": True,
-            "plugin": "watch-skill",
+            "plugin": "watch_skill",
             # v1.1.1: read from plugin.yaml -- a hardcoded string drifts
             # out of date on every bump.
             "version": _plugin_version(),
@@ -165,6 +168,6 @@ class Status(ApiHandler):
         if not payload["ready"]:
             payload["hint"] = (
                 "Install the watch-skill CLI: "
-                "`uv tool install 'watch-skill[all] @ git+https://github.com/oxbshw/watch-skill'`"
+                "`uv tool install 'watch-skill[standard] @ git+https://github.com/oxbshw/watch-skill'`"
             )
         return payload

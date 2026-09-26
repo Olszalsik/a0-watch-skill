@@ -73,10 +73,11 @@ def ws_doctor(also_print_version: bool = True, fix: bool = False) -> str:
             "**Fix (one-liner):**",
             "",
             "```bash",
-            "uv tool install 'watch-skill[all] @ git+https://github.com/oxbshw/watch-skill'",
+            "uv tool install 'watch-skill[standard] @ git+https://github.com/oxbshw/watch-skill'",
             "```",
             "",
-            "Fallbacks: `pipx install ...` or `pip install --user ...`",
+            "Fallbacks: `pipx install '<same spec>'` (there is no pip fallback: "
+            "installing into the framework venv leaves the binary off PATH)",
         ]
         if not install.get("auto_install", False):
             lines.append("")

@@ -39,6 +39,8 @@ arg_int = _ws_common.arg_int
 arg_str = _ws_common.arg_str
 format_for_llm = _ws_common.format_for_llm
 run_cli = _ws_common.run_cli
+build_args = _ws_common.build_args
+dropped_flags_notice = _ws_common.dropped_flags_notice
 
 
 def ws_search(
@@ -55,9 +57,19 @@ def ws_search(
     Returns:
         Markdown list of hit videos with timestamped evidence.
     """
+    # Engine 1.4.x documents `search QUERY` with no options, so `limit` is
+    # passed through build_args(): it is used when the installed build
+    # supports it and reported as dropped when it does not, rather than
+    # failing the whole search with a usage error.
+    argv, dropped = build_args(
+        ["search", query], [("--limit", str(limit))], probe=["search"]
+    )
     return format_for_llm(
-        run_cli(["search", query, "--limit", str(limit)], timeout=60),
+        run_cli(argv, timeout=60),
         max_chars=12000,
+    ) + dropped_flags_notice(
+        dropped,
+        "The engine's own default hit count applies. Narrow the query instead.",
     )
 
 

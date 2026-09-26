@@ -40,9 +40,15 @@ run_cli = _ws_common.run_cli
 
 
 def ws_status(job_id: str) -> str:
-    """Poll a backgrounded watch job. Use after ws_watch(background=True)."""
+    """Poll a backgrounded watch job. Use after ws_watch(background=True).
+
+    Engine 1.4.x moved job polling under the `jobs` group; the bare
+    `status` subcommand does not exist (it was `get_status` on the MCP
+    surface only). The `jobs` spelling is used here.
+    """
     return format_for_llm(
-        run_cli(["status", job_id], timeout=30, json_output=True), max_chars=4000
+        run_cli(["jobs", "status", job_id], timeout=30, json_output=True),
+        max_chars=4000,
     )
 
 

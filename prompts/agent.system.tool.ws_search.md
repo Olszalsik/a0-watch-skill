@@ -1,6 +1,6 @@
 ### ws_search
 hybrid keyword+semantic search across every indexed video (video intelligence)
-args: `query` (required), optional `limit` (default 10)
+args: `query` (required), optional `limit` (default 10; the engine's own hit count applies if its CLI build takes no `--limit`)
 use when the user asks "find the moment in any video where X" and you don't know which video holds the answer
 follow each hit with `ws_ask` (or `ws_moment`) on the returned video_id + timestamp
 example:

@@ -2,7 +2,7 @@
 
 > **Watch. Remember. Fix. Verify.**
 > Give any Agent Zero session a video input: watch, index, ask, and iterate
-> (THE LOOP). 23 MCP tools + a CLI + REST + native Python wrappers, with a
+> (THE LOOP). 39 MCP tools + a CLI + REST + native Python wrappers, with a
 > specialized "watch-skill video analyst" sub-agent and auxiliary skills for
 > watching videos, asking with timestamped evidence, running THE LOOP, and
 > learning from mistakes.
@@ -34,7 +34,7 @@ runtime via `uv tool install` and runs as a side-car MCP server.
 | **Native tools** | `tools/ws_*.py` (11 tools) | CLI fallbacks so the LLM can do read operations even when the MCP server fails to spawn. |
 | **Tool prompts** | `prompts/agent.system.tool.ws_*.md` (11 files) | One `agent.system.tool.<name>.md` per native tool - this is what makes the tools visible to the LLM. |
 | **Slash commands** | `commands/*.command.yaml` + `commands/*.py` | `/watch`, `/ws-doctor`, `/ws-library`, `/ws-stats` (dispatched by the `_commands` plugin). |
-| **API endpoints** | `api/*.py` (5 handlers) | `/api/plugins/watch-skill/{status,doctor,library,setup,mcp_config}`. |
+| **API endpoints** | `api/*.py` (5 handlers) | `/api/plugins/watch_skill/{status,doctor,library,setup,mcp_config}`. |
 | **Settings UI** | `webui/config.html` | Card under Agent Zero -> Settings -> Plugins -> Watch Skill. |
 | **Auxiliary skills** | `skills/{watching-videos,asking-with-evidence,the-loop,learning-from-mistakes}/SKILL.md` | 4 a0 skills. |
 | **WebUI** | `extensions/python/banners/banner.py` | Topbar status chip (live status surface; the old page-head JS was never loaded by the framework and was removed in v1.1.1). |
@@ -46,7 +46,7 @@ runtime via `uv tool install` and runs as a side-car MCP server.
 
 ### 1. Enable the plugin
 
-Drop the plugin directory into `/a0/usr/plugins/watch-skill/` (or install
+Drop the plugin directory into `/a0/usr/plugins/watch_skill/` (or install
 via the Plugin Hub), then toggle it on in **Settings -> Plugins -> Watch
 Skill**.
 
@@ -56,7 +56,7 @@ The plugin will **not** install the engine by default - run this in your
 shell:
 
 ```bash
-uv tool install 'watch-skill[all] @ git+https://github.com/oxbshw/watch-skill'
+uv tool install 'watch-skill[standard] @ git+https://github.com/oxbshw/watch-skill'
 ```
 
 Or, in the chat, simply say:
@@ -136,7 +136,7 @@ These are available to the LLM even if the MCP server fails to spawn:
 | `ws_report_mistake(video, question, wrong_answer, correction)` | Store a local lesson. |
 | `ws_loop(mode, ...)` | THE LOOP - capture, iterate, video-gen, game, monitor. |
 
-The **MCP server** (23 tools, auto-injected into the system prompt) is
+The **MCP server** (39 tools, auto-injected into the system prompt) is
 still the primary integration path - these are belt-and-braces.
 
 ---
@@ -148,11 +148,11 @@ Routes are dispatched by the framework as
 
 | Method + path | Purpose |
 |---|---|
-| `GET  /api/plugins/watch-skill/status` | CLI installed? MCP registered? Library size? UI toggles? |
-| `POST /api/plugins/watch-skill/doctor` | Run `watch-skill doctor` (optional `{"fix": true}`). |
-| `GET  /api/plugins/watch-skill/library` | Full library overview JSON. |
-| `GET  /api/plugins/watch-skill/mcp_config` | The `mcpServers` snippet (for copy-paste). |
-| `POST /api/plugins/watch-skill/setup` | Install CLI + register MCP + set vision provider. |
+| `GET  /api/plugins/watch_skill/status` | CLI installed? MCP registered? Library size? UI toggles? |
+| `POST /api/plugins/watch_skill/doctor` | Run `watch-skill doctor` (optional `{"fix": true}`). |
+| `GET  /api/plugins/watch_skill/library` | Full library overview JSON. |
+| `GET  /api/plugins/watch_skill/mcp_config` | The `mcpServers` snippet (for copy-paste). |
+| `POST /api/plugins/watch_skill/setup` | Install CLI + register MCP + set vision provider. |
 
 POST handlers require the standard Agent Zero CSRF header (use the
 WebUI's `fetchApi`); GET handlers are open.
@@ -175,7 +175,7 @@ Inside the container:
 
 ```bash
 # Install the engine once (or run /ws-doctor in the chat)
-uv tool install 'watch-skill[all] @ git+https://github.com/oxbshw/watch-skill'
+uv tool install 'watch-skill[standard] @ git+https://github.com/oxbshw/watch-skill'
 
 # Run the MCP server (already wired in by this plugin)
 watch-skill serve

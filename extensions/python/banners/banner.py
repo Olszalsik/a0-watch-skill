@@ -58,7 +58,8 @@ def _library_count() -> int | None:
     if cli:
         try:
             out = subprocess.run(
-                [cli, "list", "--limit", "0", "--json"],
+                # Engine 1.4.x `list` takes no options (see api/status.py).
+                [cli, "list", "--json"],
                 capture_output=True, text=True, timeout=10, check=False,
             )
             if out.returncode == 0 and out.stdout.strip():
